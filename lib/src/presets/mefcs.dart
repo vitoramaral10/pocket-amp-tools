@@ -59,22 +59,40 @@ Uint8List savePresetPacket(int presetId, List<int> body) {
   ]);
 }
 
+/// Bit 7 of an EQ record's position byte: a custom firmware's 7-band record,
+/// whose other five bytes are packed fields with no invalid value.
+const int eqSevenBandBit = 0x80;
+
 /// Writes one 7-byte EQ record (on, position, five bands). Persisted by
-/// [commitPacket].
-Uint8List saveEqPacket(int presetId, List<int> record) {
+/// [commitPacket]. A 7-band record is only written with [sevenBand], for a
+/// pedal that already holds one: the stock firmware cannot read it.
+Uint8List saveEqPacket(
+  int presetId,
+  List<int> record, {
+  bool sevenBand = false,
+}) {
+  final String slot = 'P${(presetId + 1).toString().padLeft(2, '0')}';
   if (presetId < 0 ||
       presetId >= presetCount ||
       record.length != eqRecordLength ||
-      record[0] > 1 ||
-      record[1] > 1 ||
+      record[0] > 1) {
+    throw ArgumentError('the EQ of $slot is not a record this app can write');
+  }
+  if (record[1] & eqSevenBandBit != 0) {
+    if (!sevenBand) {
+      throw ArgumentError(
+        'the EQ of $slot is a 7-band record, and this pedal has no 7-band EQ',
+      );
+    }
+    if (record[1] & ~eqSevenBandBit > 6) {
+      throw ArgumentError('the EQ of $slot is not a record this app can write');
+    }
+  } else if (record[1] > 1 ||
       record.skip(2).any((int b) {
         final int v = b >= 128 ? b - 256 : b;
         return v < -6 || v > 6;
       })) {
-    throw ArgumentError(
-      'the EQ of P${(presetId + 1).toString().padLeft(2, '0')} is not a record '
-      'this app can write',
-    );
+    throw ArgumentError('the EQ of $slot is not a record this app can write');
   }
   final int address =
       eqTableAddress + eqHeaderLength + eqRecordLength * presetId;

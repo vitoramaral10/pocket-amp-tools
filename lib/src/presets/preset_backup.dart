@@ -128,7 +128,7 @@ Map<String, Object> _readableEq(Uint8List r) {
     'on': r[0] != 0,
     'position': at < 2 ? const <String>['tail', 'head'][at] : at,
   };
-  if (r[1] & 0x80 == 0) {
+  if (r[1] & eqSevenBandBit == 0) {
     return eq
       ..['bands'] = <int>[for (final int b in r.sublist(2)) b.toSigned(8)];
   }
@@ -238,6 +238,10 @@ Future<PresetDiff> restorePresetBank(
   if (diff.isEmpty) {
     return diff;
   }
+  // A pedal that holds a 7-band EQ record runs the firmware that reads them.
+  final bool sevenBand = <int>[
+    for (int id = 0; id < presetCount; id++) before.eqRecord(id)[1],
+  ].any((int position) => position & eqSevenBandBit != 0);
   // Every packet is built before the first write, so a record this app
   // cannot write stops the restore with the pedal untouched.
   final List<(Uint8List, String)> writes;
@@ -246,7 +250,10 @@ Future<PresetDiff> restorePresetBank(
       for (final int id in diff.presets)
         (savePresetPacket(id, backup.preset(id)), 'saving P${id + 1}'),
       for (final int id in diff.eq)
-        (saveEqPacket(id, backup.eqRecord(id)), 'saving the EQ of P${id + 1}'),
+        (
+          saveEqPacket(id, backup.eqRecord(id), sevenBand: sevenBand),
+          'saving the EQ of P${id + 1}',
+        ),
     ];
   } on ArgumentError catch (e) {
     throw PresetIoException(

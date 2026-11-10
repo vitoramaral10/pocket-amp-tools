@@ -240,6 +240,57 @@ void main() {
     },
   );
 
+  group('7-band EQ records', () {
+    const List<int> sevenBand = <int>[1, 0x80, 61, 244, 254, 133, 8];
+
+    Future<List<String>> restoreSevenBandTo(Uint8List flash) async {
+      final FakeBank pedal = FakeBank(flash);
+      final PresetSession s = PresetSession(pedal);
+      final PresetBackup saved = await readPresetBank(s, 'x');
+      final PresetBackup backup = PresetBackup(
+        identity: 'x',
+        created: saved.created,
+        presets: saved.presets,
+        eq: Uint8List.fromList(saved.eq)
+          ..setAll(eqHeaderLength + 79 * eqRecordLength, sevenBand),
+      );
+      try {
+        await restorePresetBank(s, backup);
+        expect(pedal.flash.sublist(pedal.flash.length - 7), sevenBand);
+      } finally {
+        await s.close();
+      }
+      return pedal.writes;
+    }
+
+    test('go back to a pedal that already holds one', () async {
+      final Uint8List flash = bank()
+        ..[eqTableAddress + eqHeaderLength + 1] = 0x80;
+      expect(await restoreSevenBandTo(flash), <String>['eq', 'commit']);
+    });
+
+    test('are refused on a pedal with none, before any write', () async {
+      await expectLater(
+        restoreSevenBandTo(bank()),
+        throwsA(
+          isA<PresetIoException>().having(
+            (PresetIoException e) => e.message,
+            'message',
+            'Cannot restore: the EQ of P80 is a 7-band record, and this '
+                'pedal has no 7-band EQ. Nothing was written to the pedal.',
+          ),
+        ),
+      );
+    });
+
+    test('with a position past 6 are refused', () {
+      expect(
+        () => saveEqPacket(0, <int>[1, 0x87, 0, 0, 0, 0, 0], sevenBand: true),
+        throwsArgumentError,
+      );
+    });
+  });
+
   test('restore with nothing to do writes nothing', () async {
     final FakeBank pedal = FakeBank(bank());
     final PresetSession s = PresetSession(pedal);
