@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -132,6 +133,62 @@ void main() {
     expect(pedal.writes, <String>['preset 0', 'preset 79', 'eq', 'commit']);
     expect(pedal.flash, bank());
     await s.close();
+  });
+
+  test('the backup file also shows the presets as plain fields', () {
+    final Uint8List a = Uint8List(eqTableAddress + eqTableLength)
+      ..setAll(eqTableAddress, eqHeader);
+    // P02: volume 60, MOD first in the chain, AMP on with model 7 and its
+    // first knob at 300; a 5-band EQ at the head.
+    final int p02 = presetSize;
+    a[p02] = 60;
+    a.setAll(p02 + 2, <int>[2, 0, 1, 3, 4, 5]);
+    a[p02 + 8 + 1] = 1;
+    a[p02 + 14 + 1] = 7;
+    a.setAll(p02 + 20 + 12, <int>[0x2C, 0x01]);
+    final int eq = eqTableAddress + eqHeaderLength;
+    a.setAll(eq + eqRecordLength, <int>[1, 1, 6, 0xFA, 0, 0, 3]);
+    // P03: a 7-band record (bands 1 -2 3 -4 5 -6 7 dB, level -3, model 1).
+    a.setAll(eq + 2 * eqRecordLength, <int>[1, 0x84, 193, 15, 94, 244, 233]);
+
+    final PresetBackup b = PresetBackup(
+      identity: 'Pocket AMP_105',
+      created: DateTime.utc(2026),
+      presets: Uint8List.sublistView(a, 0, eqTableAddress),
+      eq: Uint8List.sublistView(a, eqTableAddress),
+    );
+    final Map<String, Object?> file =
+        jsonDecode(b.toJson()) as Map<String, Object?>;
+    final List<Object?> readable = file['readable']! as List<Object?>;
+    expect(readable, hasLength(presetCount));
+    expect(readable[1], <String, Object>{
+      'preset': 'P02',
+      'volume': 60,
+      'chain': <String>['MOD', 'FX', 'AMP', 'DLY', 'REV', 'CAB'],
+      'blocks': <String, Object>{
+        for (final String name in blockNames)
+          name: <String, Object>{
+            'on': name == 'AMP',
+            'model': name == 'AMP' ? 7 : 0,
+            'knobs': <int>[name == 'AMP' ? 300 : 0, 0, 0, 0, 0, 0],
+          },
+      },
+      'eq': <String, Object>{
+        'on': true,
+        'position': 'head',
+        'bands': <int>[6, -6, 0, 0, 3],
+      },
+    });
+    expect((readable[2]! as Map<String, Object?>)['eq'], <String, Object>{
+      'on': true,
+      'position': 4,
+      'bands_db': <int>[1, -2, 3, -4, 5, -6, 7],
+      'level_db': -6,
+      'model': 1,
+    });
+    // Restore still reads the raw data, whatever "readable" says.
+    file['readable'] = <Object>[];
+    expect(PresetBackup.fromJson(jsonEncode(file)).presets, b.presets);
   });
 
   test('restore with nothing to do writes nothing', () async {
