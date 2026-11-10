@@ -82,7 +82,7 @@ The file can be read and compared in a text editor or with `git diff`. Next to t
 }
 ```
 
-Models and knobs are numbers for now: their names are not mapped yet. The restore reads only the raw data (`presets` and `eq`), so editing the `readable` part changes nothing.
+Every preset lists all six blocks; the example shows one. Models and knobs are numbers for now: their names are not mapped yet. The block names follow the order on the pedal's screen and are not confirmed for every position. The restore reads only the raw data (`presets` and `eq`), so editing the `readable` part changes nothing.
 
 ## Safety checks
 

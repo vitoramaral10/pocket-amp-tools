@@ -91,7 +91,8 @@ class PresetBackup {
         'about':
             'The app restores from "presets" and "eq". "readable" shows the '
             'same data as plain fields, for reading and comparing; editing it '
-            'changes nothing.',
+            'changes nothing. Block names follow the order on the screen and '
+            'are not confirmed for every position.',
         'readable': readable,
         'presets': base64Encode(presets),
         'eq': base64Encode(eq),
@@ -105,8 +106,9 @@ class PresetBackup {
   }
 }
 
-/// The six blocks of a preset body, in the order the pedal's screen shows
-/// them. What each model number and knob means is not mapped yet.
+/// Names for the six block positions of a preset body, taken from the order
+/// on the pedal's screen. Only MOD's position was checked on a pedal; what
+/// each model number and knob means is not mapped yet.
 const List<String> blockNames = <String>[
   'FX',
   'AMP',
@@ -248,8 +250,7 @@ Future<PresetDiff> restorePresetBank(
     ];
   } on ArgumentError catch (e) {
     throw PresetIoException(
-      'This backup has data the app cannot write (${e.message}). '
-      'Nothing was written to the pedal.',
+      'Cannot restore: ${e.message}. Nothing was written to the pedal.',
     );
   }
   int done = 0;
