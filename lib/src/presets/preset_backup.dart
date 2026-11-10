@@ -119,34 +119,12 @@ const List<String> blockNames = <String>[
 ];
 
 /// An EQ record: on/off, position in the chain (0 tail, 1 head) and five
-/// bands in the steps the pedal stores. A custom firmware with a 7-band EQ
-/// sets bit 7 of the position byte and packs 7 gains of 5 bits (dB), a 4-bit
-/// level (2 dB steps) and a model bit into the other five bytes.
-Map<String, Object> _readableEq(Uint8List r) {
-  final int at = r[1] & 0x7F;
-  final Map<String, Object> eq = <String, Object>{
-    'on': r[0] != 0,
-    'position': at < 2 ? const <String>['tail', 'head'][at] : at,
-  };
-  if (r[1] & 0x80 == 0) {
-    return eq
-      ..['bands'] = <int>[for (final int b in r.sublist(2)) b.toSigned(8)];
-  }
-  int bits = 0;
-  for (int i = 0; i < 5; i++) {
-    bits |= r[2 + i] << (8 * i);
-  }
-  // The firmware reads the most negative value of a field as 0.
-  int field(int bit, int n) {
-    final int v = ((bits >> bit) & ((1 << n) - 1)).toSigned(n);
-    return v == -(1 << (n - 1)) ? 0 : v;
-  }
-
-  return eq
-    ..['bands_db'] = <int>[for (int i = 0; i < 7; i++) field(5 * i, 5)]
-    ..['level_db'] = 2 * field(35, 4)
-    ..['model'] = (bits >> 39) & 1;
-}
+/// bands in the steps the pedal stores.
+Map<String, Object> _readableEq(Uint8List r) => <String, Object>{
+  'on': r[0] != 0,
+  'position': r[1] < 2 ? const <String>['tail', 'head'][r[1]] : r[1],
+  'bands': <int>[for (final int b in r.sublist(2)) b.toSigned(8)],
+};
 
 /// Which slots differ between two backups.
 class PresetDiff {

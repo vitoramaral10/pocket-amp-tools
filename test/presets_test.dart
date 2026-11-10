@@ -148,8 +148,6 @@ void main() {
     a.setAll(p02 + 20 + 12, <int>[0x2C, 0x01]);
     final int eq = eqTableAddress + eqHeaderLength;
     a.setAll(eq + eqRecordLength, <int>[1, 1, 6, 0xFA, 0, 0, 3]);
-    // P03: a 7-band record (bands 1 -2 3 -4 5 -6 7 dB, level -3, model 1).
-    a.setAll(eq + 2 * eqRecordLength, <int>[1, 0x84, 193, 15, 94, 244, 233]);
 
     final PresetBackup b = PresetBackup(
       identity: 'Pocket AMP_105',
@@ -179,30 +177,6 @@ void main() {
         'bands': <int>[6, -6, 0, 0, 3],
       },
     });
-    expect((readable[2]! as Map<String, Object?>)['eq'], <String, Object>{
-      'on': true,
-      'position': 4,
-      'bands_db': <int>[1, -2, 3, -4, 5, -6, 7],
-      'level_db': -6,
-      'model': 1,
-    });
-    // P04: the most negative band (raw 16) and level (raw 8) read as 0.
-    a.setAll(eq + 3 * eqRecordLength, <int>[1, 0x80, 0x10, 0, 0, 0, 0x40]);
-    expect(
-      PresetBackup(
-        identity: 'x',
-        created: DateTime.utc(2026),
-        presets: Uint8List.sublistView(a, 0, eqTableAddress),
-        eq: Uint8List.sublistView(a, eqTableAddress),
-      ).readable[3]['eq'],
-      <String, Object>{
-        'on': true,
-        'position': 'tail',
-        'bands_db': <int>[0, 0, 0, 0, 0, 0, 0],
-        'level_db': 0,
-        'model': 0,
-      },
-    );
     // Restore still reads the raw data, whatever "readable" says.
     file['readable'] = <Object>[];
     expect(PresetBackup.fromJson(jsonEncode(file)).presets, b.presets);
