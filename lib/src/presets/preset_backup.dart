@@ -236,21 +236,26 @@ Future<PresetDiff> restorePresetBank(
   if (diff.isEmpty) {
     return diff;
   }
-  final int steps = diff.presets.length + diff.eq.length;
-  int done = 0;
-  for (final int id in diff.presets) {
-    await session.write(
-      savePresetPacket(id, backup.preset(id)),
-      'saving P${id + 1}',
+  // Every packet is built before the first write, so a record this app
+  // cannot write stops the restore with the pedal untouched.
+  final List<(Uint8List, String)> writes;
+  try {
+    writes = <(Uint8List, String)>[
+      for (final int id in diff.presets)
+        (savePresetPacket(id, backup.preset(id)), 'saving P${id + 1}'),
+      for (final int id in diff.eq)
+        (saveEqPacket(id, backup.eqRecord(id)), 'saving the EQ of P${id + 1}'),
+    ];
+  } on ArgumentError catch (e) {
+    throw PresetIoException(
+      'This backup has data the app cannot write (${e.message}). '
+      'Nothing was written to the pedal.',
     );
-    onProgress?.call('Writing presets', ++done / steps);
   }
-  for (final int id in diff.eq) {
-    await session.write(
-      saveEqPacket(id, backup.eqRecord(id)),
-      'saving the EQ of P${id + 1}',
-    );
-    onProgress?.call('Writing presets', ++done / steps);
+  int done = 0;
+  for (final (Uint8List packet, String what) in writes) {
+    await session.write(packet, what);
+    onProgress?.call('Writing presets', ++done / writes.length);
   }
   await session.write(commitPacket(), 'storing the presets');
   final PresetBackup after = await readPresetBank(
