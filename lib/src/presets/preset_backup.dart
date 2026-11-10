@@ -53,11 +53,47 @@ class PresetBackup {
     return Uint8List.sublistView(eq, at, at + eqRecordLength);
   }
 
+  /// The same data as plain fields, for reading and comparing backups.
+  /// Restore never reads it back.
+  List<Map<String, Object>> get readable => <Map<String, Object>>[
+    for (int id = 0; id < presetCount; id++) _readable(id),
+  ];
+
+  Map<String, Object> _readable(int id) {
+    final Uint8List p = preset(id);
+    int le16(int at) => p[at] | (p[at + 1] << 8);
+    return <String, Object>{
+      'preset': 'P${(id + 1).toString().padLeft(2, '0')}',
+      'volume': le16(0),
+      'chain': <Object>[
+        for (final int b in p.sublist(2, 8))
+          b < blockNames.length ? blockNames[b] : b,
+      ],
+      'blocks': <String, Object>{
+        for (int b = 0; b < blockNames.length; b++)
+          blockNames[b]: <String, Object>{
+            'on': p[8 + b] != 0,
+            'model': p[14 + b],
+            'knobs': <int>[
+              for (int k = 0; k < 6; k++) le16(20 + b * 12 + k * 2),
+            ],
+          },
+      },
+      'eq': _readableEq(eqRecord(id)),
+    };
+  }
+
   String toJson() =>
       const JsonEncoder.withIndent('  ').convert(<String, Object>{
         'format': format,
         'pedal': identity,
         'created': created.toUtc().toIso8601String(),
+        'about':
+            'The app restores from "presets" and "eq". "readable" shows the '
+            'same data as plain fields, for reading and comparing; editing it '
+            'changes nothing. Block names follow the order on the screen and '
+            'are not confirmed for every position.',
+        'readable': readable,
         'presets': base64Encode(presets),
         'eq': base64Encode(eq),
       });
@@ -68,6 +104,48 @@ class PresetBackup {
     return 'pocket-amp-presets-${t.year}${two(t.month)}${two(t.day)}-'
         '${two(t.hour)}${two(t.minute)}${two(t.second)}.json';
   }
+}
+
+/// Names for the six block positions of a preset body, taken from the order
+/// on the pedal's screen. Only MOD's position was checked on a pedal; what
+/// each model number and knob means is not mapped yet.
+const List<String> blockNames = <String>[
+  'FX',
+  'AMP',
+  'MOD',
+  'DLY',
+  'REV',
+  'CAB',
+];
+
+/// An EQ record: on/off, position in the chain (0 tail, 1 head) and five
+/// bands in the steps the pedal stores. A custom firmware with a 7-band EQ
+/// sets bit 7 of the position byte and packs 7 gains of 5 bits (dB), a 4-bit
+/// level (2 dB steps) and a model bit into the other five bytes.
+Map<String, Object> _readableEq(Uint8List r) {
+  final int at = r[1] & 0x7F;
+  final Map<String, Object> eq = <String, Object>{
+    'on': r[0] != 0,
+    'position': at < 2 ? const <String>['tail', 'head'][at] : at,
+  };
+  if (r[1] & 0x80 == 0) {
+    return eq
+      ..['bands'] = <int>[for (final int b in r.sublist(2)) b.toSigned(8)];
+  }
+  int bits = 0;
+  for (int i = 0; i < 5; i++) {
+    bits |= r[2 + i] << (8 * i);
+  }
+  // The firmware reads the most negative value of a field as 0.
+  int field(int bit, int n) {
+    final int v = ((bits >> bit) & ((1 << n) - 1)).toSigned(n);
+    return v == -(1 << (n - 1)) ? 0 : v;
+  }
+
+  return eq
+    ..['bands_db'] = <int>[for (int i = 0; i < 7; i++) field(5 * i, 5)]
+    ..['level_db'] = 2 * field(35, 4)
+    ..['model'] = (bits >> 39) & 1;
 }
 
 /// Which slots differ between two backups.
@@ -160,21 +238,25 @@ Future<PresetDiff> restorePresetBank(
   if (diff.isEmpty) {
     return diff;
   }
-  final int steps = diff.presets.length + diff.eq.length;
-  int done = 0;
-  for (final int id in diff.presets) {
-    await session.write(
-      savePresetPacket(id, backup.preset(id)),
-      'saving P${id + 1}',
+  // Every packet is built before the first write, so a record this app
+  // cannot write stops the restore with the pedal untouched.
+  final List<(Uint8List, String)> writes;
+  try {
+    writes = <(Uint8List, String)>[
+      for (final int id in diff.presets)
+        (savePresetPacket(id, backup.preset(id)), 'saving P${id + 1}'),
+      for (final int id in diff.eq)
+        (saveEqPacket(id, backup.eqRecord(id)), 'saving the EQ of P${id + 1}'),
+    ];
+  } on ArgumentError catch (e) {
+    throw PresetIoException(
+      'Cannot restore: ${e.message}. Nothing was written to the pedal.',
     );
-    onProgress?.call('Writing presets', ++done / steps);
   }
-  for (final int id in diff.eq) {
-    await session.write(
-      saveEqPacket(id, backup.eqRecord(id)),
-      'saving the EQ of P${id + 1}',
-    );
-    onProgress?.call('Writing presets', ++done / steps);
+  int done = 0;
+  for (final (Uint8List packet, String what) in writes) {
+    await session.write(packet, what);
+    onProgress?.call('Writing presets', ++done / writes.length);
   }
   await session.write(commitPacket(), 'storing the presets');
   final PresetBackup after = await readPresetBank(

@@ -71,7 +71,10 @@ Uint8List saveEqPacket(int presetId, List<int> record) {
         final int v = b >= 128 ? b - 256 : b;
         return v < -6 || v > 6;
       })) {
-    throw ArgumentError('invalid EQ record for preset $presetId');
+    throw ArgumentError(
+      'the EQ of P${(presetId + 1).toString().padLeft(2, '0')} is not a record '
+      'this app can write',
+    );
   }
   final int address =
       eqTableAddress + eqHeaderLength + eqRecordLength * presetId;

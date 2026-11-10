@@ -68,6 +68,22 @@ Do not unplug the pedal in a hurry. If the app says the pedal did not come back,
 
 The **Presets** card saves all 80 presets and their EQ to a `.json` file and restores one. A restore writes only what differs from the pedal and then reads everything back to confirm. The backup taken automatically before each update is also kept in `Documents/Pocket AMP Upgrader`.
 
+The file can be read and compared in a text editor or with `git diff`. Next to the raw data it lists every preset as plain fields:
+
+```json
+{
+  "preset": "P01",
+  "volume": 60,
+  "chain": ["FX", "AMP", "MOD", "DLY", "REV", "CAB"],
+  "blocks": {
+    "AMP": { "on": true, "model": 7, "knobs": [50, 60, 45, 55, 50, 0] }
+  },
+  "eq": { "on": true, "position": "tail", "bands": [2, 0, -1, 0, 3] }
+}
+```
+
+Every preset lists all six blocks; the example shows one. Models and knobs are numbers for now: their names are not mapped yet. The block names follow the order on the pedal's screen and are not confirmed for every position. The restore reads only the raw data (`presets` and `eq`), so editing the `readable` part changes nothing.
+
 ## Safety checks
 
 Before anything is written, the app:
