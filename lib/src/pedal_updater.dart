@@ -235,7 +235,8 @@ class PedalUpdater {
   }
 
   /// Opens [port] and asks for its identity. Returns the open link when
-  /// [accept] likes the answer; closes it otherwise.
+  /// [accept] likes the answer; closes it otherwise, also when the port fails
+  /// with an I/O error while being asked.
   Future<(OtaLink, String)?> _probe(
     MidiPortRef port,
     bool Function(String identity) accept,
@@ -257,6 +258,8 @@ class PedalUpdater {
       }
     } on MidiPortGone {
       // Fall through and close.
+    } on MidiIoException catch (e) {
+      _log('  ${port.name}: I/O error ($e)');
     }
     await link.close();
     return null;
