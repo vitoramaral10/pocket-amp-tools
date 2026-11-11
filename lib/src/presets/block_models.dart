@@ -48,7 +48,7 @@ const Map<String, List<(String, List<String>)>> blockModels =
       ],
       'MOD': <(String, List<String>)>[
         ('Chorus', <String>['Speed', 'Depth', 'Mix']),
-        ('Phaser', <String>['Speed', 'ParamA', 'ParamB', 'Fb']),
+        ('Phaser', <String>['Speed', 'MidCut (ParamA)', 'Reso (ParamB)', 'Fb']),
         ('Tremolo', <String>['Speed', 'Depth', 'Level']),
         ('Flanger', <String>['Speed', 'Depth', 'Fb', 'Mix']),
         ('Vibrato', <String>['Speed', 'Depth']),
@@ -59,7 +59,7 @@ const Map<String, List<(String, List<String>)>> blockModels =
         ('Analog', <String>['Time', 'Fb', 'Mix', 'Phaser', 'Pitch']),
         ('Duck', <String>['Time', 'Fb', 'Mix', 'Unpack', 'Speed', 'Depth']),
         ('Dtape', <String>['Time', 'Fb', 'Mix', 'Grit', 'Speed', 'Depth']),
-        ('Dual', <String>['Time', 'Fb', 'Mix', 'Grit', 'Speed', 'Depth']),
+        ('Dual', <String>['Time', 'Fb', 'Mix', 'T-Mode (Grit)', 'Speed', 'Depth']),
         ('Lofi', <String>['Time', 'Fb', 'Mix', 'Grit', 'Speed', 'Depth']),
       ],
       'REV': <(String, List<String>)>[
