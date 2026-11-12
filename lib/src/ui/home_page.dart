@@ -606,6 +606,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _savePresetFile() => _runPresetTask('Saving a file', () async {
     final PresetBackup b = _workspace.draft!;
+    if (Platform.isAndroid) {
+      // file_selector has no save dialog on Android: keep it with the backups.
+      final File f = await PresetService.keepCopy(b);
+      _workspace.saved();
+      return 'Saved to ${f.path}.';
+    }
     final FileSaveLocation? where = await getSaveLocation(
       suggestedName: b.suggestedFileName,
       acceptedTypeGroups: const <XTypeGroup>[

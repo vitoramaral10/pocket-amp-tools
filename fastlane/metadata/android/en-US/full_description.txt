@@ -1,0 +1,17 @@
+Update the firmware of the <b>M-VAVE Pocket AMP</b> guitar pedal and edit its presets from your phone, over a USB OTG cable. Clones sold under other names, such as the Coolmusic PIXIE1, are supported too.
+
+<b>What it does</b>
+<ul>
+<li>Updates the pedal with M-VAVE's official firmware file, after a backup of your presets.</li>
+<li>Backs up, edits and restores presets; edits are heard live on the pedal.</li>
+<li>Uploads your own cabinet IRs (WAV) to the 20 CAB slots.</li>
+<li>Optional assistant: describe a sound and an AI service you choose (any OpenAI-compatible address, your own key) suggests a preset.</li>
+</ul>
+
+<b>Network</b>
+The app only goes online when you ask it to: <i>Download official firmware</i> fetches the file from M-VAVE's server, and the assistant talks to the address you configure. Nothing else is sent.
+
+<b>Limits on Android</b>
+Only USB is supported; Bluetooth editing works on Linux only. The pedal firmware is M-VAVE's and is not free software.
+
+This project is not affiliated with M-VAVE.

@@ -71,7 +71,9 @@ abstract class MidiBackend {
     if (Platform.isWindows) {
       return WinMmBackend();
     }
-    if (Platform.isMacOS) {
+    if (Platform.isMacOS || Platform.isAndroid) {
+      // On Android, USB-MIDI comes through android.media.midi in the same
+      // plugin. Bluetooth there is not wired: BleBackend speaks BlueZ only.
       return CoreMidiBackend();
     }
     throw UnsupportedError('Unsupported platform');
