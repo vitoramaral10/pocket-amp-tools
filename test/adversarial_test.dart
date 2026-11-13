@@ -112,11 +112,11 @@ void main() {
     expect(b.preset(0), before);
   });
 
-  test('writing stops when the pedal changed since it was read', () async {
+  test('writing stops when the pedal changed an edited slot', () async {
     final FakePedal pedal = FakePedal(image: Uint8List(1024), bank: demoBank());
     final PresetBackup read = _of(demoBank());
     final PresetBackup draft = read.copy()..setOn(2, 3, !read.isOn(2, 3));
-    pedal.bank![9 * presetSize] ^= 1; // P10 changed on the pedal itself
+    pedal.bank![2 * presetSize] ^= 1; // P03 changed on the pedal itself
     final Uint8List onPedal = Uint8List.fromList(pedal.bank!);
     final PresetSession s = PresetSession(await pedal.open(pedal.port));
     await expectLater(
@@ -125,6 +125,37 @@ void main() {
     );
     await s.close();
     expect(pedal.bank, onPedal, reason: 'nothing written');
+  });
+
+  test('an edit reads and writes only its slot, leaving the others', () async {
+    final FakePedal pedal = FakePedal(image: Uint8List(1024), bank: demoBank());
+    final PresetBackup read = _of(demoBank());
+    final PresetBackup draft = read.copy()..setOn(2, 3, !read.isOn(2, 3));
+    pedal.bank![9 * presetSize] ^= 1; // P10 changed on the pedal itself
+    final List<int> p10 = pedal.bank!.sublist(9 * presetSize, 10 * presetSize);
+    final List<String> steps = <String>[];
+    final PresetSession s = PresetSession(await pedal.open(pedal.port));
+    final PresetDiff d = await restorePresetBank(
+      s,
+      draft,
+      expected: read,
+      onProgress: (String step, _) => steps.add(step),
+    );
+    await s.close();
+    expect(d.presets, <int>[2]);
+    expect(
+      pedal.bank!.sublist(2 * presetSize, 3 * presetSize),
+      draft.preset(2),
+    );
+    expect(
+      pedal.bank!.sublist(9 * presetSize, 10 * presetSize),
+      p10,
+      reason: 'not undone',
+    );
+    expect(steps.where((String x) => x != 'Writing presets'), <String>[
+      'Reading the pedal',
+      'Checking',
+    ], reason: 'one read before and one after, not the whole bank twice');
   });
 
   test('a slow ack to a flash write does not send it again', () async {
