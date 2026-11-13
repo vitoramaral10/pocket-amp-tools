@@ -34,6 +34,7 @@ import 'library_page.dart';
 import 'onboarding.dart';
 import 'presets_page.dart';
 import 'visuals.dart';
+import 'editor_settings.dart';
 
 /// Official download link published on M-VAVE's downloads page. The file is
 /// fetched from M-VAVE's own server; this app never redistributes it.
@@ -1092,12 +1093,24 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
 
   /// Writes a frozen copy of the draft, refusing if the pedal changed since
   /// it was read.
-  Future<void> _writeDraft() => _restore(
-    _workspace.draft!.copy(),
-    'the editor',
-    then: _workspace.written,
-    expected: _workspace.onPedal,
-  );
+  Future<void> _writeDraft() async {
+    final PresetBackup? pedal = _workspace.onPedal;
+    // Over presets read from the pedal, the question can be turned off.
+    if (pedal != null && !await EditorSettings.confirmWrite()) {
+      await _restoreNow(
+        _workspace.draft!.copy(),
+        then: _workspace.written,
+        expected: pedal,
+      );
+      return;
+    }
+    await _restore(
+      _workspace.draft!.copy(),
+      'the editor',
+      then: _workspace.written,
+      expected: pedal,
+    );
+  }
 
   Future<void> _restore(
     PresetBackup b,
@@ -1250,6 +1263,8 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
         message: _presetMessage,
         messageIsError: _presetError,
         onRead: _readPresets,
+        onOpen: _openPresetFile,
+        onSave: _savePresetFile,
         onWrite: _writeDraft,
       ),
       1 => LibraryPage(

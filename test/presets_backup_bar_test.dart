@@ -37,6 +37,8 @@ Future<void> _show(
           message: null,
           messageIsError: false,
           onRead: onRead ?? () {},
+          onOpen: () {},
+          onSave: () {},
           onWrite: onWrite,
         ),
       ),

@@ -233,6 +233,8 @@ class PresetsPage extends StatelessWidget {
     required this.message,
     required this.messageIsError,
     required this.onRead,
+    required this.onOpen,
+    required this.onSave,
     required this.onWrite,
   });
 
@@ -244,7 +246,127 @@ class PresetsPage extends StatelessWidget {
   final String? message;
   final bool messageIsError;
   final VoidCallback onRead;
+  final VoidCallback onOpen;
+  final VoidCallback onSave;
   final VoidCallback onWrite;
+
+  /// Keys for the whole page, so files work before anything is loaded. A
+  /// focused slider or text field keeps its own arrows and Home/End.
+  Map<ShortcutActivator, VoidCallback> _keys(BuildContext context) {
+    final PresetBackup? draft = workspace.draft;
+    void move(int by) {
+      if (draft != null) {
+        _move(workspace, _shownSlots(workspace, draft), by);
+      }
+    }
+
+    // The open block, when it can be edited as its card allows (not EQ).
+    final int id = workspace.selected;
+    final int block = workspace.openBlock;
+    final bool editable =
+        !busy && draft != null && !draft.oldLayout && block < blockNames.length;
+    void nextModel(int by) {
+      if (editable) {
+        final int n = blockModels[blockNames[block]]!.length;
+        workspace.changeModel(id, block, (draft.model(id, block) + by) % n);
+      }
+    }
+
+    return <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.arrowLeft): () => move(-1),
+      const SingleActivator(LogicalKeyboardKey.arrowUp): () => move(-1),
+      const SingleActivator(LogicalKeyboardKey.arrowRight): () => move(1),
+      const SingleActivator(LogicalKeyboardKey.arrowDown): () => move(1),
+      const SingleActivator(LogicalKeyboardKey.pageUp): () => move(-10),
+      const SingleActivator(LogicalKeyboardKey.pageDown): () => move(10),
+      const SingleActivator(LogicalKeyboardKey.home): () => move(-presetCount),
+      const SingleActivator(LogicalKeyboardKey.end): () => move(presetCount),
+      // Any slot, whatever the filter shows.
+      const SingleActivator(LogicalKeyboardKey.f2): () async {
+        if (draft == null) {
+          return;
+        }
+        final int? id = await _askSlot(context, draft.usableCount);
+        if (id != null) {
+          workspace.select(id);
+        }
+      },
+      // 1 opens the first chip of the chain row, 2 the next, and so on.
+      for (int n = 1; n <= 9; n++)
+        CharacterActivator('$n'): () {
+          final List<int> chips = draft == null
+              ? const <int>[]
+              : _chipOrder(draft, workspace.selected);
+          if (n <= chips.length) {
+            workspace.open(chips[n - 1]);
+          }
+        },
+      const SingleActivator(LogicalKeyboardKey.space): () {
+        if (editable) {
+          final bool on = !draft.isOn(id, block);
+          draft.setOn(id, block, on);
+          workspace.edited();
+          workspace.live?.toggle(block, on);
+        }
+      },
+      const CharacterActivator('['): () => nextModel(-1),
+      const CharacterActivator(']'): () => nextModel(1),
+      const CharacterActivator('?'): () => _showShortcuts(context),
+      _ctrl(LogicalKeyboardKey.keyF): () {
+        if (draft != null) {
+          showMetaFilter(context, workspace.details, draft.usableCount);
+        }
+      },
+      const SingleActivator(LogicalKeyboardKey.escape): () {
+        if (workspace.details.filtering) {
+          workspace.details.clearFilter();
+        }
+      },
+      // Enabled as in the menu.
+      _ctrl(LogicalKeyboardKey.keyC, shift: true): () {
+        if (draft != null) {
+          _copyPreset(context, workspace);
+        }
+      },
+      _ctrl(LogicalKeyboardKey.keyV, shift: true): () {
+        if (!busy && draft != null && !draft.oldLayout) {
+          _pastePreset(context, workspace);
+        }
+      },
+      _ctrl(LogicalKeyboardKey.keyO): () {
+        if (!busy) {
+          onOpen();
+        }
+      },
+      // As the Write button shows; the write still asks first.
+      _ctrl(LogicalKeyboardKey.keyS): () {
+        if (!busy &&
+            canUsePedal &&
+            draft != null &&
+            (workspace.changed.isNotEmpty || workspace.onPedal == null)) {
+          onWrite();
+        }
+      },
+      // Like the Discard changes button: every edit goes back to the pedal's.
+      _ctrl(LogicalKeyboardKey.keyZ): () {
+        if (!busy &&
+            workspace.changed.isNotEmpty &&
+            workspace.onPedal != null) {
+          workspace.discard();
+        }
+      },
+      _ctrl(LogicalKeyboardKey.keyS, shift: true): () {
+        if (!busy && draft != null && !draft.oldLayout) {
+          onSave();
+        }
+      },
+      _ctrl(LogicalKeyboardKey.keyR): () {
+        if (!busy && canUsePedal) {
+          onRead();
+        }
+      },
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -252,7 +374,7 @@ class PresetsPage extends StatelessWidget {
       listenable: Listenable.merge(<Listenable>[workspace, workspace.details]),
       builder: (BuildContext context, _) {
         final PresetBackup? draft = workspace.draft;
-        return Column(
+        final Widget page = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             if (_Toolbar.wanted(this)) _Toolbar(page: this),
@@ -269,6 +391,10 @@ class PresetsPage extends StatelessWidget {
                   : _Editor(workspace: workspace, draft: draft, busy: busy),
             ),
           ],
+        );
+        return CallbackShortcuts(
+          bindings: _keys(context),
+          child: Focus(autofocus: true, child: page),
         );
       },
     );
@@ -331,28 +457,41 @@ class PresetsMenu extends StatelessWidget {
             MenuItemButton(
               leadingIcon: const Icon(Icons.folder_open),
               onPressed: idle ? onOpen : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyO),
               child: const Text('Open file…'),
             ),
             MenuItemButton(
               leadingIcon: const Icon(Icons.save_alt),
               onPressed: idle && editable ? onSave : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyS, shift: true),
               child: const Text('Save file…'),
             ),
             MenuItemButton(
               leadingIcon: const Icon(Icons.download_for_offline_outlined),
               onPressed: idle && canUsePedal ? onRead : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyR),
               child: const Text('Read again from pedal'),
             ),
             const Divider(),
             MenuItemButton(
               leadingIcon: const Icon(Icons.copy),
-              onPressed: loaded ? () => _copy(context) : null,
+              onPressed: loaded ? () => _copyPreset(context, workspace) : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyC, shift: true),
               child: const Text('Copy preset as JSON'),
             ),
             MenuItemButton(
               leadingIcon: const Icon(Icons.content_paste),
-              onPressed: idle && editable ? () => _paste(context) : null,
+              onPressed: idle && editable
+                  ? () => _pastePreset(context, workspace)
+                  : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyV, shift: true),
               child: const Text('Paste preset from JSON'),
+            ),
+            MenuItemButton(
+              leadingIcon: const Icon(Icons.keyboard_outlined),
+              onPressed: () => _showShortcuts(context),
+              shortcut: const CharacterActivator('?'),
+              child: const Text('Keyboard shortcuts'),
             ),
             const Divider(),
           ],
@@ -373,50 +512,53 @@ class PresetsMenu extends StatelessWidget {
       );
     },
   );
+}
 
-  PresetBackup get draft => workspace.draft!;
-  int get id => workspace.selected;
+/// The open preset to the clipboard as JSON, as the menu and Ctrl+Shift+C do.
+Future<void> _copyPreset(
+  BuildContext context,
+  PresetWorkspace workspace,
+) async {
+  final int id = workspace.selected;
+  await Clipboard.setData(
+    ClipboardData(
+      text: const JsonEncoder.withIndent('  ')
+          .convert(workspace.draft!.presetFields(id)),
+    ),
+  );
+  if (context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${slotName(id)} copied as JSON.')));
+  }
+}
 
-  void _edit(void Function() change) {
-    change();
+/// A preset in JSON from the clipboard into the open one.
+Future<void> _pastePreset(
+  BuildContext context,
+  PresetWorkspace workspace,
+) async {
+  final int id = workspace.selected;
+  String done;
+  try {
+    final String? text = (await Clipboard.getData('text/plain'))?.text;
+    final Object? j = jsonDecode(text ?? '');
+    if (j is! Map<String, Object?>) {
+      throw const FormatException('expected one preset as a JSON object');
+    }
+    workspace.draft!.setPresetFields(id, j);
     workspace.edited();
+    workspace.showOnPedal();
+    done =
+        'Pasted into ${slotName(id)}. Nothing is on the pedal until you '
+        'write it.';
+  } on FormatException catch (e) {
+    done = 'Could not paste: ${e.message}';
+  } on PlatformException catch (e) {
+    done = 'Could not read the clipboard: ${e.message ?? e.code}';
   }
-
-  Future<void> _copy(BuildContext context) async {
-    await Clipboard.setData(
-      ClipboardData(
-        text: const JsonEncoder.withIndent('  ')
-            .convert(draft.presetFields(id)),
-      ),
-    );
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${slotName(id)} copied as JSON.')),
-      );
-    }
-  }
-
-  Future<void> _paste(BuildContext context) async {
-    String done;
-    try {
-      final String? text = (await Clipboard.getData('text/plain'))?.text;
-      final Object? j = jsonDecode(text ?? '');
-      if (j is! Map<String, Object?>) {
-        throw const FormatException('expected one preset as a JSON object');
-      }
-      _edit(() => draft.setPresetFields(id, j));
-      workspace.showOnPedal();
-      done =
-          'Pasted into ${slotName(id)}. Nothing is on the pedal until you '
-          'write it.';
-    } on FormatException catch (e) {
-      done = 'Could not paste: ${e.message}';
-    } on PlatformException catch (e) {
-      done = 'Could not read the clipboard: ${e.message ?? e.code}';
-    }
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
-    }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
   }
 }
 
@@ -595,11 +737,7 @@ class _Editor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Set<int> changed = workspace.changed;
-    // The slots the filter lets through, in order.
-    final List<int> shown = <int>[
-      for (int id = 0; id < draft.usableCount; id++)
-        if (workspace.details.matches(id)) id,
-    ];
+    final List<int> shown = _shownSlots(workspace, draft);
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints box) {
         final _Detail detail = _Detail(
@@ -642,7 +780,174 @@ List<String> _onBlocks(PresetBackup d, int id) => <String>[
     if (b < blockNames.length && d.isOn(id, b)) blockNames[b],
 ];
 
-class _PresetList extends StatelessWidget {
+/// The slots the filter lets through, in order.
+List<int> _shownSlots(PresetWorkspace w, PresetBackup d) => <int>[
+  for (int id = 0; id < d.usableCount; id++)
+    if (w.details.matches(id)) id,
+];
+
+/// The blocks as the chain row shows them, with the EQ at its head or tail
+/// (older clone firmware has none).
+List<int> _chipOrder(PresetBackup d, int id) => <int>[
+  if (!d.oldLayout && d.eqAtHead(id)) PresetWorkspace.eqBlock,
+  ...d.chain(id),
+  if (!d.oldLayout && !d.eqAtHead(id)) PresetWorkspace.eqBlock,
+];
+
+/// Moves [by] rows of the filtered list; from a slot the filter hides, the
+/// first step lands on the nearest shown slot that way.
+void _move(PresetWorkspace w, List<int> shown, int by) {
+  final int at = w.selected;
+  int i = shown.indexOf(at);
+  if (i < 0) {
+    // Index of the nearest shown slot past [at] in the direction moved.
+    i = by > 0
+        ? shown.indexWhere((int id) => id > at)
+        : shown.lastIndexWhere((int id) => id < at);
+    if (i < 0) {
+      return;
+    }
+    by -= by.sign;
+  }
+  w.select(shown[(i + by).clamp(0, shown.length - 1)]);
+}
+
+bool get _apple => <TargetPlatform>{
+  TargetPlatform.macOS,
+  TargetPlatform.iOS,
+}.contains(defaultTargetPlatform);
+
+/// Ctrl, or ⌘ on Apple systems.
+SingleActivator _ctrl(LogicalKeyboardKey key, {bool shift = false}) =>
+    SingleActivator(key, control: !_apple, meta: _apple, shift: shift);
+
+String _ctrlLabel(String key) => _apple ? '⌘$key' : 'Ctrl+$key';
+
+/// `15`, `P15` or `p15` to its slot index; null outside the first [count].
+int? parseSlot(String text, [int count = presetCount]) {
+  final String t = text.trim();
+  final int? n = int.tryParse(
+    t.startsWith(RegExp('[pP]')) ? t.substring(1) : t,
+  );
+  return n != null && n >= 1 && n <= count ? n - 1 : null;
+}
+
+/// The editor's keys, shown from the menu or with `?`.
+List<(String, String)> get _shortcuts => <(String, String)>[
+  ('← ↑', 'Previous preset'),
+  ('→ ↓', 'Next preset'),
+  ('PgUp PgDn', '10 presets back or ahead'),
+  ('Home End', 'First or last preset'),
+  ('F2', 'Go to a preset by number'),
+  ('1 – 7', 'Open a block, counting from the left of the chain'),
+  ('Space', 'Turn the open block on or off'),
+  ('[ ]', 'Previous or next model of the open block'),
+  (_ctrlLabel('F'), 'Filter the presets'),
+  ('Esc', 'Clear the filter'),
+  (_ctrlLabel('Shift+C'), 'Copy the preset as JSON'),
+  (_ctrlLabel('Shift+V'), 'Paste a preset from JSON'),
+  (_ctrlLabel('O'), 'Open a file'),
+  (_ctrlLabel('S'), 'Write to the pedal'),
+  (_ctrlLabel('Shift+S'), 'Save to a file'),
+  (_ctrlLabel('Z'), 'Discard all changes'),
+  (_ctrlLabel('R'), 'Read again from the pedal'),
+  ('?', 'Show these shortcuts'),
+];
+
+Future<void> _showShortcuts(BuildContext context) {
+  final ThemeData theme = Theme.of(context);
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext context) => AlertDialog(
+      icon: const Icon(Icons.keyboard_outlined),
+      title: const Text('Keyboard shortcuts'),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          for (final (String key, String what) in _shortcuts)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 40),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(key, style: theme.textTheme.labelLarge),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(what),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+          Text(
+            'Moving between presets follows the filter, except F2. Arrows '
+            'change presets unless a knob or text field has focus.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<int?> _askSlot(BuildContext context, int count) {
+  final TextEditingController text = TextEditingController();
+  return showDialog<int>(
+    context: context,
+    builder: (BuildContext context) => ValueListenableBuilder<TextEditingValue>(
+      valueListenable: text,
+      builder: (BuildContext context, TextEditingValue v, _) {
+        final int? id = parseSlot(v.text, count);
+        void go() => Navigator.pop(context, id);
+        return AlertDialog(
+          title: const Text('Go to preset'),
+          content: TextField(
+            controller: text,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            onSubmitted: id == null ? null : (_) => go(),
+            decoration: InputDecoration(
+              labelText: 'Preset number',
+              hintText: '1 to $count',
+              border: const OutlineInputBorder(),
+              errorText: v.text.trim().isEmpty || id != null
+                  ? null
+                  : 'From 1 to $count',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: id == null ? null : go,
+              child: const Text('Go'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _PresetList extends StatefulWidget {
   const _PresetList({
     required this.workspace,
     required this.draft,
@@ -655,8 +960,45 @@ class _PresetList extends StatelessWidget {
   final Set<int> changed;
 
   @override
+  State<_PresetList> createState() => _PresetListState();
+}
+
+class _PresetListState extends State<_PresetList> {
+  static const double _row = 60;
+  final ScrollController _scroll = ScrollController();
+
+  PresetWorkspace get workspace => widget.workspace;
+  PresetBackup get draft => widget.draft;
+  List<int> get shown => widget.shown;
+  Set<int> get changed => widget.changed;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Brings the selected preset into view, as it changes from the keyboard.
+  void _reveal() {
+    final int row = shown.indexOf(workspace.selected);
+    if (!_scroll.hasClients || row < 0) {
+      return;
+    }
+    final ScrollPosition p = _scroll.position;
+    final double top = row * _row;
+    if (top < p.pixels) {
+      _scroll.jumpTo(top);
+    } else if (top + _row > p.pixels + p.viewportDimension) {
+      _scroll.jumpTo(
+        (top + _row - p.viewportDimension).clamp(0, p.maxScrollExtent),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
     final PresetDetails details = workspace.details;
     final TextStyle? quiet = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
@@ -700,9 +1042,10 @@ class _PresetList extends StatelessWidget {
 
   Widget _list(ThemeData theme, PresetDetails details) {
     return ListView.builder(
+      controller: _scroll,
       padding: const EdgeInsets.only(bottom: 8),
       itemCount: shown.length,
-      itemExtent: 60,
+      itemExtent: _row,
       itemBuilder: (BuildContext context, int row) {
         final int id = shown[row];
         final PresetMeta meta = details.metas[id];
@@ -1016,6 +1359,7 @@ class _ChainRow extends StatelessWidget {
         onTap: () => onOpen(PresetWorkspace.eqBlock),
         theme: theme,
         width: width,
+        hotkey: eqHead ? 1 : order.length + 1,
       ),
     );
     return SizedBox(
@@ -1025,52 +1369,59 @@ class _ChainRow extends StatelessWidget {
         children: <Widget>[
           // Older clone firmware has no EQ.
           if (eqHead && !draft.oldLayout) eq,
-          Flexible(child: _blocks(theme, order, width)),
+          Flexible(
+            child: _blocks(theme, order, width, eqHead && !draft.oldLayout),
+          ),
           if (!eqHead && !draft.oldLayout) eq,
         ],
       ),
     );
   }
 
-  Widget _blocks(ThemeData theme, List<int> order, double width) =>
-      ReorderableListView(
-        shrinkWrap: true,
-        scrollDirection: Axis.horizontal,
-        // The default desktop handle is an icon drawn over the chip's text;
-        // the whole chip is the handle instead.
-        buildDefaultDragHandles: false,
-        onReorderItem: (int from, int to) {
-          final List<int> next = List<int>.of(order);
-          next.insert(to, next.removeAt(from));
-          onReorder(next);
-        },
-        children: <Widget>[
-          for (final (int i, int b) in order.indexed)
-            Padding(
-              // A block normally appears once; the count keeps keys unique
-              // if a stored chain repeats one.
-              key: ValueKey<int>(
-                b + 256 * order.take(i).where((int x) => x == b).length,
-              ),
-              padding: const EdgeInsets.only(right: 8),
-              child: _dragHandle(
-                index: i,
-                enabled: enabled,
-                child: _ChainChip(
-                  name: b < blockNames.length ? blockNames[b] : 'Block $b',
-                  model: b < blockNames.length
-                      ? label(blockNames[b], draft.model(id, b))
-                      : '',
-                  on: b < blockNames.length && draft.isOn(id, b),
-                  selected: b == open,
-                  onTap: b < blockNames.length ? () => onOpen(b) : null,
-                  theme: theme,
-                  width: width,
-                ),
-              ),
+  Widget _blocks(
+    ThemeData theme,
+    List<int> order,
+    double width,
+    bool eqFirst,
+  ) => ReorderableListView(
+    shrinkWrap: true,
+    scrollDirection: Axis.horizontal,
+    // The default desktop handle is an icon drawn over the chip's text;
+    // the whole chip is the handle instead.
+    buildDefaultDragHandles: false,
+    onReorderItem: (int from, int to) {
+      final List<int> next = List<int>.of(order);
+      next.insert(to, next.removeAt(from));
+      onReorder(next);
+    },
+    children: <Widget>[
+      for (final (int i, int b) in order.indexed)
+        Padding(
+          // A block normally appears once; the count keeps keys unique
+          // if a stored chain repeats one.
+          key: ValueKey<int>(
+            b + 256 * order.take(i).where((int x) => x == b).length,
+          ),
+          padding: const EdgeInsets.only(right: 8),
+          child: _dragHandle(
+            index: i,
+            enabled: enabled,
+            child: _ChainChip(
+              name: b < blockNames.length ? blockNames[b] : 'Block $b',
+              model: b < blockNames.length
+                  ? label(blockNames[b], draft.model(id, b))
+                  : '',
+              on: b < blockNames.length && draft.isOn(id, b),
+              selected: b == open,
+              onTap: b < blockNames.length ? () => onOpen(b) : null,
+              theme: theme,
+              width: width,
+              hotkey: i + (eqFirst ? 2 : 1),
             ),
-        ],
-      );
+          ),
+        ),
+    ],
+  );
 }
 
 /// Touch drags after a long press so the row still scrolls; a mouse drags
@@ -1103,8 +1454,13 @@ class _ChainChip extends StatelessWidget {
     required this.onTap,
     required this.theme,
     this.width = 132,
+    this.hotkey,
   });
   final String name;
+
+  /// The number key that opens it, shown in a corner where there is a
+  /// keyboard.
+  final int? hotkey;
   final String model;
   final bool on;
   final double width;
@@ -1167,12 +1523,47 @@ class _ChainChip extends StatelessWidget {
         ],
       ),
     );
+    final int? key = hotkey;
+    final bool showKey =
+        key != null &&
+        key <= 9 &&
+        onTap != null &&
+        !<TargetPlatform>{
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+          TargetPlatform.fuchsia,
+        }.contains(defaultTargetPlatform);
     return Semantics(
       button: true,
       selected: selected,
+      hint: showKey ? 'Key $key' : null,
       child: MouseRegion(
         cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
-        child: GestureDetector(onTap: onTap, child: chip),
+        child: GestureDetector(
+          onTap: onTap,
+          child: showKey
+              ? Stack(
+                  children: <Widget>[
+                    chip,
+                    Positioned(
+                      top: 3,
+                      right: 7,
+                      child: ExcludeSemantics(
+                        child: Text(
+                          '$key',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: fg.withValues(alpha: 0.75),
+                            fontFeatures: const <FontFeature>[
+                              FontFeature.tabularFigures(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : chip,
+        ),
       ),
     );
   }

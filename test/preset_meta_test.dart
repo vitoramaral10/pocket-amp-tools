@@ -197,6 +197,8 @@ void main() {
             message: null,
             messageIsError: false,
             onRead: () {},
+            onOpen: () {},
+            onSave: () {},
             onWrite: () {},
           ),
         ),

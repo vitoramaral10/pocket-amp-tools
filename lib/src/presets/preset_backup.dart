@@ -603,8 +603,39 @@ class UnknownPresetLayout extends FormatException {
   final Uint8List area;
 }
 
+/// [base] with the presets and EQ records in [slots] as the pedal has them,
+/// one read per slot.
+Future<PresetBackup> _readSlots(
+  PresetSession session,
+  PresetBackup base,
+  PresetDiff slots, {
+  void Function(double fraction)? onProgress,
+}) async {
+  final PresetBackup b = base.copy();
+  final int total = slots.presets.length + slots.eq.length;
+  int done = 0;
+  for (final int id in slots.presets) {
+    b.presets.setAll(
+      id * presetSize,
+      await session.readRaw(id * presetSize, presetSize),
+    );
+    onProgress?.call(++done / total);
+  }
+  for (final int id in slots.eq) {
+    final int at = eqHeaderLength + id * eqRecordLength;
+    b.eq.setAll(at, await session.readRaw(eqTableAddress + at, eqRecordLength));
+    onProgress?.call(++done / total);
+  }
+  return b;
+}
+
 /// Writes back only what differs from [backup], commits once, and checks the
-/// result by reading everything again. Returns what was restored.
+/// result by reading it again. Returns what was restored.
+///
+/// With [expected] (what the edits were made against), only the slots that
+/// differ from it are read, written and checked, so a small edit does not
+/// read the whole bank twice; a slot the pedal changed meanwhile is left as
+/// the pedal has it.
 Future<PresetDiff> restorePresetBank(
   PresetSession session,
   PresetBackup backup, {
@@ -617,11 +648,13 @@ Future<PresetDiff> restorePresetBank(
       'back. Nothing was written to the pedal.',
     );
   }
-  final PresetBackup before = await readPresetBank(
-    session,
-    backup.identity,
-    onProgress: (double f) => onProgress?.call('Reading the pedal', f),
-  );
+  final PresetDiff? edited = expected == null
+      ? null
+      : PresetDiff.between(backup, expected);
+  void reading(double f) => onProgress?.call('Reading the pedal', f);
+  final PresetBackup before = edited == null
+      ? await readPresetBank(session, backup.identity, onProgress: reading)
+      : await _readSlots(session, expected!, edited, onProgress: reading);
   // Edits are made against what was read. If the pedal changed since (a
   // preset saved on the pedal, or another unit plugged in), writing the
   // whole difference would undo that: stop and ask for a new read.
@@ -705,11 +738,10 @@ Future<PresetDiff> restorePresetBank(
     // Saves go to a RAM mirror of the bank, which is also what reads
     // return. Check it before storing: this also makes sure every save was
     // taken, whatever a late acknowledgement said.
-    final PresetBackup after = await readPresetBank(
-      session,
-      backup.identity,
-      onProgress: (double f) => onProgress?.call('Checking', f),
-    );
+    void checking(double f) => onProgress?.call('Checking', f);
+    final PresetBackup after = edited == null
+        ? await readPresetBank(session, backup.identity, onProgress: checking)
+        : await _readSlots(session, before, diff, onProgress: checking);
     final PresetDiff seen = PresetDiff.between(backup, after);
     final PresetDiff left = PresetDiff(seen.presets, <int>[
       for (final int id in seen.eq)
