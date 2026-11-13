@@ -338,7 +338,24 @@ class PresetsPage extends StatelessWidget {
           onOpen();
         }
       },
+      // As the Write button shows; the write still asks first.
       _ctrl(LogicalKeyboardKey.keyS): () {
+        if (!busy &&
+            canUsePedal &&
+            draft != null &&
+            (workspace.changed.isNotEmpty || workspace.onPedal == null)) {
+          onWrite();
+        }
+      },
+      // Like the Discard changes button: every edit goes back to the pedal's.
+      _ctrl(LogicalKeyboardKey.keyZ): () {
+        if (!busy &&
+            workspace.changed.isNotEmpty &&
+            workspace.onPedal != null) {
+          workspace.discard();
+        }
+      },
+      _ctrl(LogicalKeyboardKey.keyS, shift: true): () {
         if (!busy && draft != null && !draft.oldLayout) {
           onSave();
         }
@@ -446,7 +463,7 @@ class PresetsMenu extends StatelessWidget {
             MenuItemButton(
               leadingIcon: const Icon(Icons.save_alt),
               onPressed: idle && editable ? onSave : null,
-              shortcut: _ctrl(LogicalKeyboardKey.keyS),
+              shortcut: _ctrl(LogicalKeyboardKey.keyS, shift: true),
               child: const Text('Save file…'),
             ),
             MenuItemButton(
@@ -830,7 +847,9 @@ List<(String, String)> get _shortcuts => <(String, String)>[
   (_ctrlLabel('Shift+C'), 'Copy the preset as JSON'),
   (_ctrlLabel('Shift+V'), 'Paste a preset from JSON'),
   (_ctrlLabel('O'), 'Open a file'),
-  (_ctrlLabel('S'), 'Save to a file'),
+  (_ctrlLabel('S'), 'Write to the pedal (asks first)'),
+  (_ctrlLabel('Shift+S'), 'Save to a file'),
+  (_ctrlLabel('Z'), 'Discard all changes'),
   (_ctrlLabel('R'), 'Read again from the pedal'),
   ('?', 'Show these shortcuts'),
 ];

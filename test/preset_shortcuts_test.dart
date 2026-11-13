@@ -16,6 +16,7 @@ Future<PresetWorkspace> _open(
   WidgetTester tester, {
   void Function(PresetDetails)? details,
   List<String>? calls,
+  bool pedal = false,
 }) async {
   tester.view.physicalSize = const Size(1000, 800);
   tester.view.devicePixelRatio = 1;
@@ -37,7 +38,7 @@ Future<PresetWorkspace> _open(
       home: Scaffold(
         body: PresetsPage(
           workspace: w,
-          canUsePedal: false,
+          canUsePedal: pedal,
           busy: false,
           task: null,
           fraction: null,
@@ -46,7 +47,7 @@ Future<PresetWorkspace> _open(
           onRead: () => calls?.add('read'),
           onOpen: () => calls?.add('open'),
           onSave: () => calls?.add('save'),
-          onWrite: () {},
+          onWrite: () => calls?.add('write'),
         ),
       ),
     ),
@@ -178,22 +179,42 @@ void main() {
     expect(w.selected, 3);
   });
 
-  testWidgets('Ctrl+O, Ctrl+S and Ctrl+R follow what the menu allows', (
+  Future<void> ctrl(
+    WidgetTester tester,
+    LogicalKeyboardKey k, {
+    bool shift = false,
+  }) async {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    if (shift) {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    }
+    await tester.sendKeyEvent(k);
+    if (shift) {
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    }
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+  }
+
+  testWidgets('Ctrl+O, Ctrl+Shift+S and Ctrl+R follow what the menu allows', (
     WidgetTester tester,
   ) async {
     final List<String> calls = <String>[];
     await _open(tester, calls: calls);
-    for (final LogicalKeyboardKey k in <LogicalKeyboardKey>[
-      LogicalKeyboardKey.keyO,
-      LogicalKeyboardKey.keyS,
-      LogicalKeyboardKey.keyR,
-    ]) {
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-      await tester.sendKeyEvent(k);
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    }
-    // No pedal in this test, so reading again stays off.
+    await ctrl(tester, LogicalKeyboardKey.keyO);
+    await ctrl(tester, LogicalKeyboardKey.keyS);
+    await ctrl(tester, LogicalKeyboardKey.keyS, shift: true);
+    await ctrl(tester, LogicalKeyboardKey.keyR);
+    // No pedal in this test, so writing and reading again stay off.
     expect(calls, <String>['open', 'save']);
+  });
+
+  testWidgets('Ctrl+S writes to the pedal when there is something to write', (
+    WidgetTester tester,
+  ) async {
+    final List<String> calls = <String>[];
+    await _open(tester, calls: calls, pedal: true);
+    await ctrl(tester, LogicalKeyboardKey.keyS);
+    expect(calls, <String>['write'], reason: 'a file draft can be written');
   });
 
   testWidgets('number keys open the blocks in chain order', (
@@ -303,6 +324,27 @@ void main() {
     Map<String, Object?> body(int id) =>
         Map<String, Object?>.of(w.draft!.presetFields(id))..remove('preset');
     expect(body(5), body(0));
+  });
+
+  testWidgets('Ctrl+Z discards the changes back to the pedal', (
+    WidgetTester tester,
+  ) async {
+    final PresetWorkspace w = await _open(tester);
+    await ctrl(tester, LogicalKeyboardKey.keyZ);
+    expect(
+      w.draft,
+      isNotNull,
+      reason: 'nothing read from a pedal to go back to',
+    );
+    final PresetBackup pedal = w.draft!.copy();
+    w.written(pedal);
+    final int volume = w.draft!.volume(0);
+    w.draft!.setVolume(0, volume == 0 ? 1 : 0);
+    w.edited();
+    expect(w.changed, isNotEmpty);
+    await ctrl(tester, LogicalKeyboardKey.keyZ);
+    expect(w.changed, isEmpty);
+    expect(w.draft!.volume(0), volume);
   });
 
   testWidgets('each chain chip shows the number key that opens it', (
