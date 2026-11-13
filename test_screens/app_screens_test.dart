@@ -50,6 +50,17 @@ void main() {
   setUp(() {
     final Directory dir = Directory.systemTemp.createTempSync('pa-');
     File('${dir.path}/onboarded').writeAsStringSync('1');
+    // Names, labels and ratings for a few slots, as a user would give them.
+    File('${dir.path}/preset-details.json').writeAsStringSync(
+      '{"labels": {"tags": ["Headphones", "Live"]}, "presets": {'
+      '"P01": {"name": "British Clean Echo", "genres": ["Blues", "Pop"], '
+      '"uses": ["Rhythm", "Arpeggios"], "tags": ["Headphones"], "rating": 4, '
+      '"description": "Mostly clean and bright, with a short echo behind."}, '
+      '"P02": {"name": "RAT British Rock", "genres": ["Rock", "Punk"], '
+      '"uses": ["Riffs"], "rating": 3}, '
+      '"P04": {"name": "High Gain Lead", "genres": ["Hard rock"], '
+      '"uses": ["Riffs", "Solo"], "tags": ["Live"], "rating": 5}}}',
+    );
     PathProviderPlatform.instance = _Paths(dir.path);
     addTearDown(() => dir.deleteSync(recursive: true));
   });
@@ -206,18 +217,11 @@ void main() {
             await tester.tap(find.text('P05'));
           }
           await tester.pump();
-          // One edit, so the "write" button and the changed marker show.
-          await tester.tap(
-            find
-                .descendant(
-                  of: find.ancestor(
-                    of: find.text('FX'),
-                    matching: find.byType(Card),
-                  ),
-                  matching: find.byType(Switch),
-                )
-                .first,
-          );
+          // One edit, so the "write" button and the changed marker show:
+          // open the FX block and flip its switch.
+          await tester.tap(find.text('FX').first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byType(Switch).first);
           await tester.pumpAndSettle();
         }, () => MockClient((_) async => http.Response.bytes(pkg, 200)));
 

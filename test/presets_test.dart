@@ -179,7 +179,13 @@ void main() {
     expect(p['eq'], <String, Object>{
       'on': true,
       'position': 'head',
-      'bands': <int>[6, -6, 0, 0, 3],
+      'bands': <Map<String, Object>>[
+        <String, Object>{'label': '100Hz', 'value': 6},
+        <String, Object>{'label': '250Hz', 'value': -6},
+        <String, Object>{'label': '800Hz', 'value': 0},
+        <String, Object>{'label': '2kHz', 'value': 0},
+        <String, Object>{'label': '10kHz', 'value': 3},
+      ],
     });
 
     // Editing a field changes what is restored. The label is not read: the
@@ -451,6 +457,28 @@ void main() {
     expect(pedal.flash.sublist(0, 7268), raw.sublist(0, 7268));
     expect(PresetBackup.fromJson(b.toJson()).presets, b.presets);
     await s.close();
+  });
+
+  test('a PIXIE1 V0.07 raw copy opens P01..P79 to view only', () async {
+    final Uint8List raw = File('test/fixtures/raw-PIXIE1_007.bin')
+        .readAsBytesSync();
+    final PresetBackup b = PresetBackup.oldLayout('PIXIE1_007', raw);
+    expect(b.usableCount, 79);
+    expect(b.presets.sublist(0, 7268), raw.sublist(0, 7268));
+    expect(b.copy().oldLayout, isTrue);
+    expect(b.toJson, throwsStateError);
+    final FakeBank pedal = FakeBank(bank());
+    final PresetSession s = PresetSession(pedal);
+    await expectLater(
+      restorePresetBank(s, b),
+      throwsA(isA<PresetIoException>()),
+    );
+    expect(pedal.writes, isEmpty);
+    await s.close();
+    expect(
+      () => PresetBackup.oldLayout('x', raw.sublist(0, 7000)),
+      throwsFormatException,
+    );
   });
 
   test('a raw copy in another layout is refused', () {

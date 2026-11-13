@@ -13,6 +13,8 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import '../assistant/agent.dart';
+import '../assistant/assistant.dart';
 import '../firmware_package.dart';
 import '../library/library.dart';
 import '../midi/midi_backend.dart';
@@ -25,11 +27,14 @@ import '../net/capped_http.dart';
 import '../presets/ir_upload.dart';
 import '../presets/nam_file.dart';
 import '../telemetry.dart';
+import 'assistant_panel.dart';
+import 'assistant_tools.dart';
 import 'backups_page.dart';
 import 'library_page.dart';
 import 'onboarding.dart';
 import 'presets_page.dart';
 import 'visuals.dart';
+import 'editor_settings.dart';
 
 /// Official download link published on M-VAVE's downloads page. The file is
 /// fetched from M-VAVE's own server; this app never redistributes it.
@@ -51,7 +56,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> implements AssistantHost {
   late final PedalUpdater _updater;
   late final PresetService _presets;
   late final AppLifecycleListener _lifecycle;
@@ -65,6 +70,10 @@ class _HomePageState extends State<HomePage> {
   DetectedPedal? _pedal;
   bool _detecting = false;
   bool _detectedOnce = false;
+
+  /// Watches the port list so plugging or unplugging the pedal needs no click.
+  Timer? _portWatch;
+  Set<String>? _lastPorts;
 
   _Stage _stage = _Stage.idle;
   UpdateProgress? _progress;
@@ -81,10 +90,6 @@ class _HomePageState extends State<HomePage> {
   /// Null until read for [_libKind].
   List<LibraryItem>? _libItems;
   Map<int, String> _libLinks = <int, String>{};
-
-  /// Whether the user wants edits played on the pedal; the link itself is
-  /// closed around every other pedal operation.
-  bool _wantLive = true;
 
   /// Bumped by [_stopLive]: a live link that finishes opening after a stop
   /// (for example, once a firmware update has begun) is closed unused.
@@ -112,9 +117,13 @@ class _HomePageState extends State<HomePage> {
     _updater = PedalUpdater(backend, log: _addLog);
     _presets = PresetService(backend);
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+    _workspace.details.open();
     // Detection only sends the identity query, so it is safe to run unasked.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       unawaited(_detect());
+      _portWatch = Timer.periodic(const Duration(seconds: 2), (_) {
+        unawaited(_watchPorts(backend));
+      });
       if (!await onboardingSeen()) {
         if (mounted) {
           await showOnboarding(context);
@@ -133,8 +142,73 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  // --- assistant ------------------------------------------------------------
+
+  late final AssistantAgent _agent = AssistantAgent(
+    tools: assistantTools(this),
+    settings: AssistantSettings.load,
+  );
+
+  /// The conversation stays when the panel closes.
+  bool _assistantOpen = false;
+
+  @override
+  PresetWorkspace get workspace => _workspace;
+
+  @override
+  String? get pedal {
+    final DetectedPedal? p = _pedal;
+    if (p == null) {
+      return null;
+    }
+    return '${p.rebrand}, firmware ${p.version}, '
+        '${p.port.bluetooth ? 'Bluetooth (presets only, no file uploads)' : 'USB'}'
+        '${p.inLoader ? ', in update mode' : ''}';
+  }
+
+  @override
+  bool get canUpload =>
+      _pedal != null && !_pedal!.inLoader && !_pedal!.port.bluetooth && !_busy;
+
+  @override
+  bool get canWrite =>
+      _pedal != null &&
+      !_pedal!.inLoader &&
+      !_busy &&
+      _workspace.draft != null &&
+      _workspace.onPedal != null;
+
+  @override
+  Future<List<LibraryItem>> library(LibraryKind kind) async =>
+      (await _lib()).list(kind);
+
+  @override
+  Future<Map<int, String>> links(LibraryKind kind) async =>
+      (await _lib()).links(kind);
+
+  @override
+  Future<String> uploadToSlot(LibraryItem item, int slot, String name) async {
+    final String? done = await _uploadNow(item, slot, name);
+    return done ??
+        (throw ToolError(_presetMessage ?? 'Another task is running.'));
+  }
+
+  @override
+  Future<String> writePresets(PresetBackup presets) async {
+    final String? done = await _restoreNow(
+      presets,
+      then: _workspace.written,
+      expected: _workspace.onPedal,
+    );
+    return done ??
+        (throw ToolError(_presetMessage ?? 'Another task is running.'));
+  }
+
   @override
   void dispose() {
+    _agent.stop();
+    _agent.dispose();
+    _portWatch?.cancel();
     _stopLive();
     _workspace.dispose();
     _lifecycle.dispose();
@@ -143,6 +217,11 @@ class _HomePageState extends State<HomePage> {
 
   /// Closing the window mid-transfer is the easiest way to brick a pedal.
   Future<AppExitResponse> _onExitRequested() async {
+    // A name or rating typed just before closing is still being written.
+    await _workspace.details.saved;
+    if (!mounted) {
+      return AppExitResponse.exit;
+    }
     if (_stage != _Stage.updating && _presetTask == null) {
       if (_workspace.unsaved.isEmpty) {
         return AppExitResponse.exit;
@@ -340,6 +419,7 @@ class _HomePageState extends State<HomePage> {
       final DetectedPedal? p = await _updater.detect();
       if (p == null) {
         _addLog('No pedal answered.');
+        _workspace.pedalGone();
       }
       // Another pedal (or new firmware) answered: what was read is not
       // what it holds. No answer at all changes nothing.
@@ -371,6 +451,41 @@ class _HomePageState extends State<HomePage> {
       } else {
         await _startLive();
       }
+    }
+  }
+
+  /// Detects again when a port appears while no pedal is known, or when the
+  /// known pedal's port goes away. Listing ports opens none of them.
+  Future<void> _watchPorts(MidiBackend backend) async {
+    if (_busy) {
+      _lastPorts = null; // an update reboots the pedal: start over after it
+      return;
+    }
+    final Set<String> now;
+    try {
+      now = <String>{
+        for (final MidiPortRef p in await backend.listPorts())
+          '${p.id}|${p.name}',
+      };
+    } catch (_) {
+      return;
+    }
+    final Set<String>? before = _lastPorts;
+    _lastPorts = now;
+    if (before == null || _busy || !mounted) {
+      return;
+    }
+    final DetectedPedal? p = _pedal;
+    final bool changed = p == null
+        ? now.difference(before).isNotEmpty
+        : !now.contains('${p.port.id}|${p.port.name}');
+    if (changed) {
+      _addLog(
+        p == null
+            ? 'New MIDI port, looking for the pedal.'
+            : 'Pedal port gone.',
+      );
+      await _detect();
     }
   }
 
@@ -475,12 +590,15 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _runPresetTask(
+  /// Runs a pedal task with the live link closed; returns what was done,
+  /// or null when it failed (the error is in [_presetMessage]) or another
+  /// task was running.
+  Future<String?> _runPresetTask(
     String task,
     Future<String> Function() run,
   ) async {
     if (_busy) {
-      return;
+      return null;
     }
     setState(() {
       _presetTask = task;
@@ -492,30 +610,37 @@ class _HomePageState extends State<HomePage> {
     try {
       final String done = await run();
       _addLog(done);
-      setState(() => _presetMessage = done);
+      // Success is said and gone; only errors stay on the page.
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(done)));
+      }
+      return done;
     } catch (e) {
       _addLog('$task failed: $e');
       setState(() {
         _presetMessage = '$e';
         _presetError = true;
       });
+      return null;
     } finally {
       setState(() => _presetTask = null);
       await _startLive();
     }
   }
 
-  /// Opens the live link when wanted and possible, and plays the selected
-  /// preset as edited.
+  /// Opens the live link when possible, and plays the selected preset as
+  /// edited. As in M-EFCS, edits always play on a connected pedal; the link
+  /// is closed around every other pedal operation.
   Future<void> _startLive() async {
     final DetectedPedal? p = _pedal;
-    if (!_wantLive ||
-        _busy ||
+    if (_busy ||
         _workspace.live != null ||
         _liveOpening != null || // one open at a time
         p == null ||
         p.inLoader ||
         _workspace.onPedal == null ||
+        _workspace.onPedal!.oldLayout || // never tested writing to it
         _stage == _Stage.updating) {
       return;
     }
@@ -595,12 +720,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _setLive(bool on) async {
-    _wantLive = on;
-    on ? await _startLive() : await _stopLive();
-    setState(() {});
-  }
-
   Future<void> _readPresets() async {
     if (await _confirmDiscard('Read the presets again?')) {
       await _readPresetsNow();
@@ -608,7 +727,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _readPresetsNow() => _runPresetTask('Reading presets', () async {
-    final PresetBackup b;
+    PresetBackup b;
     try {
       b = await _presets.backup(
         _pedal!,
@@ -616,6 +735,18 @@ class _HomePageState extends State<HomePage> {
       );
     } on UnknownPresetLayout catch (e) {
       final File raw = await PresetService.keepRaw(_pedal!.identity, e.area);
+      if (isOldPresetArea(e.area)) {
+        b = PresetBackup.oldLayout(_pedal!.identity, e.area);
+        _workspace.load(
+          b,
+          'Read from ${_pedal!.identity} at '
+          '${b.created.toLocal().toString().substring(11, 16)}',
+          fromPedal: true,
+        );
+        return 'Read P01-P79. This firmware has no EQ and cannot read P80, '
+            'so both are left out; its presets are only shown, not edited. '
+            'Raw copy kept at ${raw.path}.';
+      }
       throw PresetIoException(
         'Presets are not in the Pocket AMP layout (${e.message}). '
         'Raw copy kept at ${raw.path}.',
@@ -907,7 +1038,26 @@ class _HomePageState extends State<HomePage> {
     if (name == null) {
       return;
     }
-    await _runPresetTask(
+    await _uploadNow(it, slot, name, bytes);
+  }
+
+  /// Sends [it] to slot [slot] as [name], already confirmed; returns what
+  /// was done, or null when it failed (the error is in [_presetMessage]).
+  Future<String?> _uploadNow(
+    LibraryItem it,
+    int slot,
+    String name, [
+    Uint8List? checked,
+  ]) async {
+    final bool amp = it.kind == LibraryKind.amp;
+    final Uint8List bytes;
+    if (checked != null) {
+      bytes = checked;
+    } else {
+      bytes = await it.file.readAsBytes();
+      Library.check(it.kind, bytes); // the file may have changed on disk
+    }
+    final String? done = await _runPresetTask(
       amp ? 'Sending the model' : 'Sending the IR',
       () async {
         void progress(double f) => setState(() => _presetFraction = f);
@@ -933,13 +1083,14 @@ class _HomePageState extends State<HomePage> {
       },
     );
     await _loadLibrary();
+    return done;
   }
 
   Future<void> _editBackup(PresetBackup b, String name) async {
     if (!await _confirmDiscard('Open this backup?')) {
       return;
     }
-    _workspace.load(b, name);
+    _workspace.load(b, name, fromBackup: true);
     setState(() {
       _presetMessage = null;
       _section = 0;
@@ -948,12 +1099,24 @@ class _HomePageState extends State<HomePage> {
 
   /// Writes a frozen copy of the draft, refusing if the pedal changed since
   /// it was read.
-  Future<void> _writeDraft() => _restore(
-    _workspace.draft!.copy(),
-    'the editor',
-    then: _workspace.written,
-    expected: _workspace.onPedal,
-  );
+  Future<void> _writeDraft() async {
+    final PresetBackup? pedal = _workspace.onPedal;
+    // Over presets read from the pedal, the question can be turned off.
+    if (pedal != null && !await EditorSettings.confirmWrite()) {
+      await _restoreNow(
+        _workspace.draft!.copy(),
+        then: _workspace.written,
+        expected: pedal,
+      );
+      return;
+    }
+    await _restore(
+      _workspace.draft!.copy(),
+      'the editor',
+      then: _workspace.written,
+      expected: pedal,
+    );
+  }
 
   Future<void> _restore(
     PresetBackup b,
@@ -988,31 +1151,39 @@ class _HomePageState extends State<HomePage> {
     if (go != true) {
       return;
     }
-    await _runPresetTask('Restoring presets', () async {
-      final PresetDiff d = await _presets.restore(
-        _pedal!,
-        b,
-        onProgress: (String step, double f) => setState(() {
-          _presetTask = step;
-          _presetFraction = f;
-        }),
-        expected: expected,
-      );
-      if (then != null) {
-        then(b);
-      } else if (_workspace.onPedal != null) {
-        _workspace.written(b);
-      }
-      final String kept = d.skippedEq.isEmpty
-          ? ''
-          : ' The EQ of ${d.skippedEq.map((int i) => 'P${i + 1}').join(', ')} '
-                'was left as on the pedal: it is stored in a form this app '
-                'cannot write.';
-      return d.isEmpty
-          ? 'Nothing to write: the pedal already matches.$kept'
-          : 'Written and checked: $d.$kept';
-    });
+    await _restoreNow(b, then: then, expected: expected);
   }
+
+  /// Writes [b], already confirmed; returns what was done, or null when it
+  /// failed (the error is in [_presetMessage]).
+  Future<String?> _restoreNow(
+    PresetBackup b, {
+    void Function(PresetBackup written)? then,
+    PresetBackup? expected,
+  }) => _runPresetTask('Restoring presets', () async {
+    final PresetDiff d = await _presets.restore(
+      _pedal!,
+      b,
+      onProgress: (String step, double f) => setState(() {
+        _presetTask = step;
+        _presetFraction = f;
+      }),
+      expected: expected,
+    );
+    if (then != null) {
+      then(b);
+    } else if (_workspace.onPedal != null) {
+      _workspace.written(b);
+    }
+    final String kept = d.skippedEq.isEmpty
+        ? ''
+        : ' The EQ of ${d.skippedEq.map((int i) => 'P${i + 1}').join(', ')} '
+              'was left as on the pedal: it is stored in a form this app '
+              'cannot write.';
+    return d.isEmpty
+        ? 'Nothing to write: the pedal already matches.$kept'
+        : 'Written and checked: $d.$kept';
+  });
 
   /// Restores P01..P79 from the raw copy [area] of a pedal that was on older
   /// clone firmware.
@@ -1083,7 +1254,11 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final bool wide = MediaQuery.sizeOf(context).width >= 720;
+    // Material 3 window classes: a rail from medium (600), and the assistant
+    // beside the editor only from expanded (840), where the editor still fits.
+    final double windowWidth = MediaQuery.sizeOf(context).width;
+    final bool wide = windowWidth >= 600;
+    final bool besideEditor = windowWidth >= 840;
     final Widget page = switch (_section) {
       0 => PresetsPage(
         workspace: _workspace,
@@ -1097,8 +1272,6 @@ class _HomePageState extends State<HomePage> {
         onOpen: _openPresetFile,
         onSave: _savePresetFile,
         onWrite: _writeDraft,
-        liveOn: _workspace.live != null,
-        onLive: _setLive,
       ),
       1 => LibraryPage(
         kind: _libKind,
@@ -1154,6 +1327,25 @@ class _HomePageState extends State<HomePage> {
         onSaveNew: _backupNow,
       ),
     };
+    // The assistant sits beside the presets editor; on a narrow window it
+    // takes the page while open.
+    final bool assistant = _assistantOpen && _section == 0;
+    final Widget panel = AssistantPanel(
+      agent: _agent,
+      onClose: () => setState(() => _assistantOpen = false),
+    );
+    final Widget body = !assistant
+        ? page
+        : besideEditor
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Expanded(child: page),
+              const VerticalDivider(width: 1),
+              SizedBox(width: 380, child: panel),
+            ],
+          )
+        : panel;
     return Scaffold(
       appBar: _pedalBar(theme),
       body: wide
@@ -1175,10 +1367,10 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
                 const VerticalDivider(width: 1),
-                Expanded(child: page),
+                Expanded(child: body),
               ],
             )
-          : page,
+          : body,
       bottomNavigationBar: wide
           ? null
           : NavigationBar(
@@ -1200,6 +1392,8 @@ class _HomePageState extends State<HomePage> {
   /// Always on screen: which pedal is connected and a way to look again.
   PreferredSizeWidget _pedalBar(ThemeData theme) {
     final DetectedPedal? p = _pedal;
+    final bool compact = MediaQuery.sizeOf(context).width < 600;
+    final String detectLabel = p == null ? 'Detect pedal' : 'Detect again';
     final String title = p == null
         ? (_detecting ? 'Looking for the pedal…' : 'No pedal connected')
         : p.rebrand == null
@@ -1210,10 +1404,10 @@ class _HomePageState extends State<HomePage> {
         : p.port.bluetooth
         ? 'Bluetooth · presets only'
         : p.presetsOnly
-        ? 'Firmware ${p.version} · presets only · ${p.port.name}'
+        ? 'Firmware ${p.version} · presets only'
         : p.inLoader
-        ? 'In update mode · ${p.port.name}'
-        : 'Firmware ${p.version} · ${p.port.name}';
+        ? 'In update mode'
+        : 'Firmware ${p.version}';
     return AppBar(
       titleSpacing: 16,
       title: Row(
@@ -1259,51 +1453,50 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       actions: <Widget>[
-        if (MediaQuery.sizeOf(context).width >= 720)
-          // Material 2 stretches app bar actions to the bar's full height.
-          Center(
-            child: FilledButton.tonalIcon(
-              onPressed: _busy ? null : _detect,
-              icon: _detecting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh),
-              label: Text(p == null ? 'Detect pedal' : 'Detect again'),
+        if (_section == 0)
+          ListenableBuilder(
+            listenable: _workspace,
+            builder: (BuildContext context, _) => IconButton(
+              tooltip: _assistantOpen ? 'Hide the assistant' : 'Assistant',
+              isSelected: _assistantOpen,
+              icon: const Icon(Icons.auto_awesome),
+              onPressed: () => setState(() => _assistantOpen = !_assistantOpen),
             ),
-          )
-        else
-          IconButton.filledTonal(
-            tooltip: p == null ? 'Detect pedal' : 'Detect again',
+          ),
+        // Plugging and unplugging are caught on their own; this is the retry.
+        if (!compact) ...<Widget>[
+          IconButton(
+            tooltip: detectLabel,
             onPressed: _busy ? null : _detect,
             icon: const Icon(Icons.refresh),
           ),
-        const SizedBox(width: 4),
-        IconButton(
-          tooltip: 'Log',
-          icon: Badge(
-            isLabelVisible: _log.isNotEmpty,
-            label: Text('${_log.length}'),
-            child: const Icon(Icons.receipt_long_outlined),
-          ),
-          onPressed: () => showDialog<void>(
-            context: context,
-            builder: (BuildContext context) => Dialog(
-              child: SizedBox(width: 680, child: _LogPanel(lines: _log)),
-            ),
-          ),
-        ),
+          const SizedBox(width: 4),
+        ],
         if (Telemetry.available)
           IconButton(
             tooltip: 'Error reports',
             icon: const Icon(Icons.bug_report_outlined),
             onPressed: _askReports,
           ),
-        IconButton(
-          tooltip: 'About',
-          icon: const Icon(Icons.info_outline),
-          onPressed: () => showAboutDialog(
+        PresetsMenu(
+          workspace: _workspace,
+          busy: _busy,
+          canUsePedal: p != null && !p.inLoader,
+          onRead: _readPresets,
+          onOpen: _openPresetFile,
+          onSave: _savePresetFile,
+          log: _log,
+          // On a phone the pedal's name needs the room.
+          appBarItems: compact
+              ? <Widget>[
+                  MenuItemButton(
+                    leadingIcon: const Icon(Icons.refresh),
+                    onPressed: _busy ? null : _detect,
+                    child: Text(detectLabel),
+                  ),
+                ]
+              : const <Widget>[],
+          onAbout: () => showAboutDialog(
             context: context,
             applicationName: 'Pocket AMP Tools',
             applicationLegalese:
@@ -1311,6 +1504,7 @@ class _HomePageState extends State<HomePage> {
                 'GPL-3.0. Update protocol from M-VAVE\'s FM1 Open '
                 'project.',
           ),
+          presetActions: _section == 0,
         ),
         const SizedBox(width: 8),
       ],
@@ -2055,57 +2249,6 @@ class ConfirmUpdateDialogState extends State<ConfirmUpdateDialog> {
           child: const Text('Update'),
         ),
       ],
-    );
-  }
-}
-
-class _LogPanel extends StatelessWidget {
-  const _LogPanel({required this.lines});
-  final List<String> lines;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
-        initiallyExpanded: true,
-        title: const Text('Log'),
-        subtitle: Text('${lines.length} log lines'),
-        children: <Widget>[
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: lines.isEmpty
-                  ? null
-                  : () => Clipboard.setData(
-                      ClipboardData(
-                        text:
-                            '${Platform.operatingSystem} '
-                            '${Platform.operatingSystemVersion}\n'
-                            '${lines.join('\n')}',
-                      ),
-                    ),
-              icon: const Icon(Icons.copy, size: 18),
-              label: const Text('Copy for a bug report'),
-            ),
-          ),
-          Container(
-            width: double.infinity,
-            constraints: const BoxConstraints(maxHeight: 240),
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: SingleChildScrollView(
-              reverse: true,
-              child: SelectableText(
-                lines.join('\n'),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -27,6 +27,18 @@ class PocketAmpApp extends StatelessWidget {
       theme: themeFrom(lightColors),
       darkTheme: themeFrom(darkColors),
       home: HomePage(backend: backend),
+      // Past compact a floating snackbar spanning the window reads as a
+      // banner; Material 3 keeps it to a readable width.
+      builder: (BuildContext context, Widget? child) {
+        if (MediaQuery.sizeOf(context).width < 600) {
+          return child!;
+        }
+        final ThemeData t = Theme.of(context);
+        return Theme(
+          data: t.copyWith(snackBarTheme: t.snackBarTheme.copyWith(width: 560)),
+          child: child!,
+        );
+      },
     );
   }
 }

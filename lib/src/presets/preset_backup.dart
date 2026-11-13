@@ -15,6 +15,7 @@ class PresetBackup {
     required this.created,
     required this.presets,
     required this.eq,
+    this.oldLayout = false,
   }) {
     if (presets.length != presetCount * presetSize ||
         eq.length != eqTableLength) {
@@ -82,6 +83,27 @@ class PresetBackup {
     );
   }
 
+  /// P01..P79 read from a pedal on older clone firmware ([isOldPresetArea]),
+  /// which has no EQ table and does not answer past [oldFirmwareReadable].
+  /// Only for viewing: the EQ table is a flat filler, P80 is cut short, and
+  /// writing to that firmware was never tested, so it is neither restored
+  /// nor saved to a file.
+  factory PresetBackup.oldLayout(String identity, Uint8List area) {
+    if (!isOldPresetArea(area)) {
+      throw const FormatException(
+        'This raw copy is not in the layout of PIXIE1 V0.07.',
+      );
+    }
+    return PresetBackup(
+      identity: identity,
+      created: DateTime.now(),
+      presets: Uint8List(presetCount * presetSize)
+        ..setRange(0, oldFirmwareReadable, area),
+      eq: Uint8List(eqTableLength)..setAll(0, eqHeader),
+      oldLayout: true,
+    );
+  }
+
   static const String format = 'pocket-amp-upgrader/presets@3';
   static const String formatV2 = 'pocket-amp-upgrader/presets@2';
   static const String formatV1 = 'pocket-amp-upgrader/presets@1';
@@ -90,6 +112,12 @@ class PresetBackup {
   final DateTime created;
   final Uint8List presets;
   final Uint8List eq;
+
+  /// See [PresetBackup.oldLayout].
+  final bool oldLayout;
+
+  /// Presets that hold real data: P80 is cut short in [oldLayout].
+  int get usableCount => oldLayout ? oldPresetCount : presetCount;
 
   Uint8List preset(int id) =>
       Uint8List.sublistView(presets, id * presetSize, (id + 1) * presetSize);
@@ -120,6 +148,7 @@ class PresetBackup {
     created: created,
     presets: Uint8List.fromList(presets),
     eq: Uint8List.fromList(eq),
+    oldLayout: oldLayout,
   );
 
   // --- editing, by preset id and block position ---------------------------
@@ -164,13 +193,21 @@ class PresetBackup {
   Map<String, Object> presetFields(int id) => _readable(id);
 
   /// Replaces preset [id] and its EQ with [fields], in the shape of
-  /// [presetFields]; the "preset" key, if any, is ignored.
-  void setPresetFields(int id, Map<String, Object?> fields) {
+  /// [presetFields]; the "preset" key, if any, is ignored. With [keepEq] the
+  /// stored EQ record stays as it is and "eq" is not read: for a record in
+  /// a form the app cannot write back.
+  void setPresetFields(
+    int id,
+    Map<String, Object?> fields, {
+    bool keepEq = false,
+  }) {
     final _Reader r = _Reader(_slot(id), strict: true);
     final Uint8List body = r.preset(fields);
-    final Uint8List record = r.eq(fields['eq'], 'eq');
+    final Uint8List? record = keepEq ? null : r.eq(fields['eq'], 'eq');
     presets.setAll(id * presetSize, body);
-    eq.setAll(_eqAt(id), record);
+    if (record != null) {
+      eq.setAll(_eqAt(id), record);
+    }
   }
 
   /// Every preset as plain fields. Holds every byte of the preset and of its
@@ -210,23 +247,27 @@ class PresetBackup {
     };
   }
 
-  String toJson() =>
-      const JsonEncoder.withIndent('  ').convert(<String, Object>{
-        'format': format,
-        'pedal': identity,
-        'created': created.toUtc().toIso8601String(),
-        'about':
-            'The app restores from these fields: edit a value and restore the '
-            'file to change it on the pedal. Model names follow firmware '
-            'V1.05. Each block lists its six stored knob values in order; '
-            'the "label" only says what the knob is and is not read back, so '
-            'the position decides which knob a value goes to. Labels marked '
-            'unused are values the model does not use. Block names follow '
-            'the order on the screen and are not confirmed for every '
-            'position.',
-        'models': modelListId,
-        'presets': readable,
-      });
+  String toJson() => oldLayout
+      ? throw StateError('An old-firmware bank is not saved to a file.')
+      : const JsonEncoder.withIndent('  ').convert(<String, Object>{
+          'format': format,
+          'pedal': identity,
+          'created': created.toUtc().toIso8601String(),
+          'about':
+              'The app restores from these fields: edit a value and restore the '
+              'file to change it on the pedal. Model names follow firmware '
+              'V1.05. Each block lists its six stored knob values in order; '
+              'the "label" only says what the knob is and is not read back, so '
+              'the position decides which knob a value goes to. Labels marked '
+              'unused are values the model does not use. Knob values range '
+              'from 0 to 100. The EQ lists its five bands in order, labelled '
+              'by frequency the same way; band values range from -6 to +6, '
+              'each step being 0.5 dB. Block names follow '
+              'the order on the screen and are not confirmed for every '
+              'position.',
+          'models': modelListId,
+          'presets': readable,
+        });
 
   String get suggestedFileName {
     String two(int v) => v.toString().padLeft(2, '0');
@@ -290,12 +331,28 @@ const Map<String, String> _formerKnobNames = <String, String>{
   'T-Mode (Grit)': 'Grit',
 };
 
+/// Centre frequencies of the five EQ bands, in band order. What the backup
+/// file shows next to each band value; values are read back by position.
+const List<String> eqBandLabels = <String>[
+  '100Hz',
+  '250Hz',
+  '800Hz',
+  '2kHz',
+  '10kHz',
+];
+
 /// An EQ record: on/off, position in the chain (0 tail, 1 head) and five
-/// bands in the steps the pedal stores.
+/// bands in the steps the pedal stores (0.5 dB each).
 Map<String, Object> _readableEq(Uint8List r) => <String, Object>{
   'on': _flag(r[0]),
   'position': r[1] < 2 ? const <String>['tail', 'head'][r[1]] : r[1],
-  'bands': <int>[for (final int b in r.sublist(2)) b.toSigned(8)],
+  'bands': <Map<String, Object>>[
+    for (final (int i, int b) in r.sublist(2).indexed)
+      <String, Object>{
+        'label': i < eqBandLabels.length ? eqBandLabels[i] : 'band${i + 1}',
+        'value': b.toSigned(8),
+      },
+  ],
 };
 
 /// Turns the plain fields of one preset back into bytes, naming the preset
@@ -426,8 +483,20 @@ class _Reader {
         'tail',
         'head',
       ], beyond: !strict),
+      // A band is a number, or a labelled value as the file writes it; the
+      // label is not read.
       for (final Object? b in bands)
-        number(b, 'eq.bands', strict ? -6 : -128, strict ? 6 : 127) & 0xFF,
+        number(
+              b is Map<String, Object?>
+                  ? (b.containsKey('value')
+                        ? b['value']
+                        : _bad('eq.bands', 'each band needs a "value"'))
+                  : b,
+              'eq.bands',
+              strict ? -6 : -128,
+              strict ? 6 : 127,
+            ) &
+            0xFF,
     ]);
   }
 }
@@ -534,19 +603,58 @@ class UnknownPresetLayout extends FormatException {
   final Uint8List area;
 }
 
+/// [base] with the presets and EQ records in [slots] as the pedal has them,
+/// one read per slot.
+Future<PresetBackup> _readSlots(
+  PresetSession session,
+  PresetBackup base,
+  PresetDiff slots, {
+  void Function(double fraction)? onProgress,
+}) async {
+  final PresetBackup b = base.copy();
+  final int total = slots.presets.length + slots.eq.length;
+  int done = 0;
+  for (final int id in slots.presets) {
+    b.presets.setAll(
+      id * presetSize,
+      await session.readRaw(id * presetSize, presetSize),
+    );
+    onProgress?.call(++done / total);
+  }
+  for (final int id in slots.eq) {
+    final int at = eqHeaderLength + id * eqRecordLength;
+    b.eq.setAll(at, await session.readRaw(eqTableAddress + at, eqRecordLength));
+    onProgress?.call(++done / total);
+  }
+  return b;
+}
+
 /// Writes back only what differs from [backup], commits once, and checks the
-/// result by reading everything again. Returns what was restored.
+/// result by reading it again. Returns what was restored.
+///
+/// With [expected] (what the edits were made against), only the slots that
+/// differ from it are read, written and checked, so a small edit does not
+/// read the whole bank twice; a slot the pedal changed meanwhile is left as
+/// the pedal has it.
 Future<PresetDiff> restorePresetBank(
   PresetSession session,
   PresetBackup backup, {
   void Function(String step, double fraction)? onProgress,
   PresetBackup? expected,
 }) async {
-  final PresetBackup before = await readPresetBank(
-    session,
-    backup.identity,
-    onProgress: (double f) => onProgress?.call('Reading the pedal', f),
-  );
+  if (backup.oldLayout) {
+    throw const PresetIoException(
+      'Presets read from older clone firmware are only shown, never written '
+      'back. Nothing was written to the pedal.',
+    );
+  }
+  final PresetDiff? edited = expected == null
+      ? null
+      : PresetDiff.between(backup, expected);
+  void reading(double f) => onProgress?.call('Reading the pedal', f);
+  final PresetBackup before = edited == null
+      ? await readPresetBank(session, backup.identity, onProgress: reading)
+      : await _readSlots(session, expected!, edited, onProgress: reading);
   // Edits are made against what was read. If the pedal changed since (a
   // preset saved on the pedal, or another unit plugged in), writing the
   // whole difference would undo that: stop and ask for a new read.
@@ -630,11 +738,10 @@ Future<PresetDiff> restorePresetBank(
     // Saves go to a RAM mirror of the bank, which is also what reads
     // return. Check it before storing: this also makes sure every save was
     // taken, whatever a late acknowledgement said.
-    final PresetBackup after = await readPresetBank(
-      session,
-      backup.identity,
-      onProgress: (double f) => onProgress?.call('Checking', f),
-    );
+    void checking(double f) => onProgress?.call('Checking', f);
+    final PresetBackup after = edited == null
+        ? await readPresetBank(session, backup.identity, onProgress: checking)
+        : await _readSlots(session, before, diff, onProgress: checking);
     final PresetDiff seen = PresetDiff.between(backup, after);
     final PresetDiff left = PresetDiff(seen.presets, <int>[
       for (final int id in seen.eq)

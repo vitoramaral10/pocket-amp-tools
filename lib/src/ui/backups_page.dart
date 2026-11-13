@@ -44,17 +44,69 @@ class BackupsPage extends StatefulWidget {
 class _BackupsPageState extends State<BackupsPage> {
   late Future<List<(File, PresetBackup?, String?)>> _files = widget.list();
 
-  void _reload() => setState(() => _files = widget.list());
+  void _reload() => setState(() {
+    _files = widget.list();
+  });
+
+  Future<void> _delete(File f) async {
+    final String name = f.uri.pathSegments.last;
+    final bool yes =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) => AlertDialog(
+            title: Text('Delete backup "$name"?'),
+            content: const Text(
+              'The file is deleted from this computer. This cannot be undone.',
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!yes) {
+      return;
+    }
+    try {
+      await f.delete();
+    } on FileSystemException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text('Could not delete $name: ${e.message}')),
+        );
+      }
+    }
+    if (mounted) {
+      _reload();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final bool compact = MediaQuery.sizeOf(context).width < 600;
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
       children: <Widget>[
-        Row(
+        Flex(
+          // On a phone the button goes under the text instead of squeezing it.
+          direction: compact ? Axis.vertical : Axis.horizontal,
+          crossAxisAlignment: compact
+              ? CrossAxisAlignment.start
+              : CrossAxisAlignment.center,
+          spacing: 12,
           children: <Widget>[
-            Expanded(
+            // flex 0 lays it out at its own height inside the list.
+            Flexible(
+              flex: compact ? 0 : 1,
+              fit: FlexFit.tight,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
@@ -145,6 +197,7 @@ class _BackupsPageState extends State<BackupsPage> {
                           onEdit: widget.onEdit,
                           onRestore: widget.onRestore,
                           onRestoreRaw: widget.onRestoreRaw,
+                          onDelete: () => _delete(f),
                         ),
                       ],
                     ],
@@ -167,7 +220,9 @@ class _BackupTile extends StatelessWidget {
     required this.onEdit,
     required this.onRestore,
     required this.onRestoreRaw,
+    required this.onDelete,
   });
+  final VoidCallback onDelete;
   final bool canEdit;
   final File file;
   final PresetBackup? backup;
@@ -181,6 +236,11 @@ class _BackupTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final String name = file.uri.pathSegments.last;
     final PresetBackup? b = backup;
+    final Widget delete = IconButton(
+      tooltip: 'Delete backup',
+      onPressed: canEdit ? onDelete : null,
+      icon: const Icon(Icons.delete_outline),
+    );
     if (b == null && error == null) {
       return ListTile(
         leading: const IconBadge(Icons.memory),
@@ -189,10 +249,16 @@ class _BackupTile extends StatelessWidget {
           'Raw copy from older firmware: P01–P79 can be restored; P80 and '
           'the EQ stay as they are on the pedal.',
         ),
-        trailing: OutlinedButton.icon(
-          onPressed: canRestore ? () => onRestoreRaw(file) : null,
-          icon: const Icon(Icons.history),
-          label: const Text('Restore…'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            OutlinedButton.icon(
+              onPressed: canRestore ? () => onRestoreRaw(file) : null,
+              icon: const Icon(Icons.history),
+              label: const Text('Restore…'),
+            ),
+            delete,
+          ],
         ),
       );
     }
@@ -201,6 +267,7 @@ class _BackupTile extends StatelessWidget {
         leading: const IconBadge(Icons.error_outline),
         title: Text(name),
         subtitle: Text('Not readable: $error'),
+        trailing: delete,
       );
     }
     return ListTile(
@@ -208,22 +275,27 @@ class _BackupTile extends StatelessWidget {
       title: Text(b.created.toLocal().toString().substring(0, 16)),
       subtitle: Text('${b.identity} · $name'),
       trailing: MediaQuery.sizeOf(context).width < 640
-          ? PopupMenuButton<bool>(
+          ? PopupMenuButton<VoidCallback>(
               tooltip: 'Actions',
-              onSelected: (bool restore) =>
-                  restore ? onRestore(b, name) : onEdit(b, name),
-              itemBuilder: (BuildContext context) => <PopupMenuEntry<bool>>[
-                PopupMenuItem<bool>(
-                  value: false,
-                  enabled: canEdit,
-                  child: const Text('Open in editor'),
-                ),
-                PopupMenuItem<bool>(
-                  value: true,
-                  enabled: canRestore,
-                  child: const Text('Restore…'),
-                ),
-              ],
+              onSelected: (VoidCallback action) => action(),
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<VoidCallback>>[
+                    PopupMenuItem<VoidCallback>(
+                      value: () => onEdit(b, name),
+                      enabled: canEdit,
+                      child: const Text('Open in editor'),
+                    ),
+                    PopupMenuItem<VoidCallback>(
+                      value: () => onRestore(b, name),
+                      enabled: canRestore,
+                      child: const Text('Restore…'),
+                    ),
+                    PopupMenuItem<VoidCallback>(
+                      value: onDelete,
+                      enabled: canEdit,
+                      child: const Text('Delete…'),
+                    ),
+                  ],
             )
           : Wrap(
               spacing: 8,
@@ -238,6 +310,7 @@ class _BackupTile extends StatelessWidget {
                   icon: const Icon(Icons.history),
                   label: const Text('Restore…'),
                 ),
+                delete,
               ],
             ),
     );

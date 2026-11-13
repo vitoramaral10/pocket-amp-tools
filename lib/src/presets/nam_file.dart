@@ -173,3 +173,43 @@ bool _allLeaky(Object? a) {
       (x['negative_slope'] as num?)?.toDouble() == 0.01;
   return a is List ? a.length == pedalTaps.length && a.every(leaky) : leaky(a);
 }
+
+/// What a .nam file says about itself (its "metadata"), in the words the
+/// assistant reads: the gear captured, the kind of tone, how much the
+/// capture saturates (gain, 0 to 1) and its loudness in dB. Fields the file
+/// leaves out are left out; a file that is not JSON gives an empty map.
+Map<String, Object?> namMetadata(String json) {
+  final Object? root;
+  try {
+    root = jsonDecode(json);
+  } on FormatException {
+    return const <String, Object?>{};
+  }
+  final Object? m = root is Map ? root['metadata'] : null;
+  if (m is! Map) {
+    return const <String, Object?>{};
+  }
+  String? text(String key) {
+    final Object? v = m[key];
+    return v is String && v.trim().isNotEmpty ? v.trim() : null;
+  }
+
+  final String? make = text('gear_make');
+  final String? model = text('gear_model');
+  final Object? gain = m['gain'];
+  final Object? loudness = m['loudness'];
+  return <String, Object?>{
+    if (text('name') != null) 'name': text('name'),
+    // Make and model are often the same text.
+    if (make != null || model != null)
+      'gear': make == null || model == null || model.contains(make)
+          ? model ?? make
+          : '$make $model',
+    if (text('gear_type') != null) 'gear_type': text('gear_type'),
+    if (text('tone_type') != null) 'tone_type': text('tone_type'),
+    if (gain is num) 'gain': double.parse(gain.toStringAsFixed(2)),
+    if (loudness is num)
+      'loudness_db': double.parse(loudness.toStringAsFixed(1)),
+    if (text('modeled_by') != null) 'captured_by': text('modeled_by'),
+  };
+}
