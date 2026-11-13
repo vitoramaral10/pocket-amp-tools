@@ -1284,6 +1284,7 @@ class _ChainRow extends StatelessWidget {
         onTap: () => onOpen(PresetWorkspace.eqBlock),
         theme: theme,
         width: width,
+        hotkey: eqHead ? 1 : order.length + 1,
       ),
     );
     return SizedBox(
@@ -1293,52 +1294,59 @@ class _ChainRow extends StatelessWidget {
         children: <Widget>[
           // Older clone firmware has no EQ.
           if (eqHead && !draft.oldLayout) eq,
-          Flexible(child: _blocks(theme, order, width)),
+          Flexible(
+            child: _blocks(theme, order, width, eqHead && !draft.oldLayout),
+          ),
           if (!eqHead && !draft.oldLayout) eq,
         ],
       ),
     );
   }
 
-  Widget _blocks(ThemeData theme, List<int> order, double width) =>
-      ReorderableListView(
-        shrinkWrap: true,
-        scrollDirection: Axis.horizontal,
-        // The default desktop handle is an icon drawn over the chip's text;
-        // the whole chip is the handle instead.
-        buildDefaultDragHandles: false,
-        onReorderItem: (int from, int to) {
-          final List<int> next = List<int>.of(order);
-          next.insert(to, next.removeAt(from));
-          onReorder(next);
-        },
-        children: <Widget>[
-          for (final (int i, int b) in order.indexed)
-            Padding(
-              // A block normally appears once; the count keeps keys unique
-              // if a stored chain repeats one.
-              key: ValueKey<int>(
-                b + 256 * order.take(i).where((int x) => x == b).length,
-              ),
-              padding: const EdgeInsets.only(right: 8),
-              child: _dragHandle(
-                index: i,
-                enabled: enabled,
-                child: _ChainChip(
-                  name: b < blockNames.length ? blockNames[b] : 'Block $b',
-                  model: b < blockNames.length
-                      ? label(blockNames[b], draft.model(id, b))
-                      : '',
-                  on: b < blockNames.length && draft.isOn(id, b),
-                  selected: b == open,
-                  onTap: b < blockNames.length ? () => onOpen(b) : null,
-                  theme: theme,
-                  width: width,
-                ),
-              ),
+  Widget _blocks(
+    ThemeData theme,
+    List<int> order,
+    double width,
+    bool eqFirst,
+  ) => ReorderableListView(
+    shrinkWrap: true,
+    scrollDirection: Axis.horizontal,
+    // The default desktop handle is an icon drawn over the chip's text;
+    // the whole chip is the handle instead.
+    buildDefaultDragHandles: false,
+    onReorderItem: (int from, int to) {
+      final List<int> next = List<int>.of(order);
+      next.insert(to, next.removeAt(from));
+      onReorder(next);
+    },
+    children: <Widget>[
+      for (final (int i, int b) in order.indexed)
+        Padding(
+          // A block normally appears once; the count keeps keys unique
+          // if a stored chain repeats one.
+          key: ValueKey<int>(
+            b + 256 * order.take(i).where((int x) => x == b).length,
+          ),
+          padding: const EdgeInsets.only(right: 8),
+          child: _dragHandle(
+            index: i,
+            enabled: enabled,
+            child: _ChainChip(
+              name: b < blockNames.length ? blockNames[b] : 'Block $b',
+              model: b < blockNames.length
+                  ? label(blockNames[b], draft.model(id, b))
+                  : '',
+              on: b < blockNames.length && draft.isOn(id, b),
+              selected: b == open,
+              onTap: b < blockNames.length ? () => onOpen(b) : null,
+              theme: theme,
+              width: width,
+              hotkey: i + (eqFirst ? 2 : 1),
             ),
-        ],
-      );
+          ),
+        ),
+    ],
+  );
 }
 
 /// Touch drags after a long press so the row still scrolls; a mouse drags
@@ -1371,8 +1379,13 @@ class _ChainChip extends StatelessWidget {
     required this.onTap,
     required this.theme,
     this.width = 132,
+    this.hotkey,
   });
   final String name;
+
+  /// The number key that opens it, shown in a corner where there is a
+  /// keyboard.
+  final int? hotkey;
   final String model;
   final bool on;
   final double width;
@@ -1435,12 +1448,47 @@ class _ChainChip extends StatelessWidget {
         ],
       ),
     );
+    final int? key = hotkey;
+    final bool showKey =
+        key != null &&
+        key <= 9 &&
+        onTap != null &&
+        !<TargetPlatform>{
+          TargetPlatform.android,
+          TargetPlatform.iOS,
+          TargetPlatform.fuchsia,
+        }.contains(defaultTargetPlatform);
     return Semantics(
       button: true,
       selected: selected,
+      hint: showKey ? 'Key $key' : null,
       child: MouseRegion(
         cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
-        child: GestureDetector(onTap: onTap, child: chip),
+        child: GestureDetector(
+          onTap: onTap,
+          child: showKey
+              ? Stack(
+                  children: <Widget>[
+                    chip,
+                    Positioned(
+                      top: 3,
+                      right: 7,
+                      child: ExcludeSemantics(
+                        child: Text(
+                          '$key',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: fg.withValues(alpha: 0.75),
+                            fontFeatures: const <FontFeature>[
+                              FontFeature.tabularFigures(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : chip,
+        ),
       ),
     );
   }

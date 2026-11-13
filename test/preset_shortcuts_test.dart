@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -219,5 +220,31 @@ void main() {
     }
     await tester.sendKeyEvent(LogicalKeyboardKey.digit9, character: '9');
     expect(w.openBlock, chips.last, reason: 'no ninth chip');
+  });
+
+  testWidgets('each chain chip shows the number key that opens it', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    final PresetWorkspace w = await _open(tester);
+    final PresetBackup d = w.draft!;
+    final List<String> names = <String>[
+      if (d.eqAtHead(0)) 'EQ',
+      for (final int b in d.chain(0)) blockNames[b],
+      if (!d.eqAtHead(0)) 'EQ',
+    ];
+    for (final (int i, String name) in names.indexed) {
+      final Finder chip = find.byWidgetPredicate(
+        (Widget x) => x is Semantics && x.properties.hint == 'Key ${i + 1}',
+      );
+      expect(chip, findsOneWidget, reason: 'key ${i + 1}');
+      expect(
+        find.descendant(of: chip, matching: find.text(name)),
+        findsOneWidget,
+        reason: 'key ${i + 1} is $name',
+      );
+    }
+    debugDefaultTargetPlatformOverride = null;
   });
 }
