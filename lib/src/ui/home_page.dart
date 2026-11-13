@@ -25,6 +25,7 @@ import '../net/capped_http.dart';
 import '../presets/ir_upload.dart';
 import '../presets/nam_file.dart';
 import '../telemetry.dart';
+import 'assistant_dialog.dart';
 import 'backups_page.dart';
 import 'library_page.dart';
 import 'onboarding.dart';
@@ -85,10 +86,6 @@ class _HomePageState extends State<HomePage> {
   /// Null until read for [_libKind].
   List<LibraryItem>? _libItems;
   Map<int, String> _libLinks = <int, String>{};
-
-  /// Whether the user wants edits played on the pedal; the link itself is
-  /// closed around every other pedal operation.
-  bool _wantLive = true;
 
   /// Bumped by [_stopLive]: a live link that finishes opening after a stop
   /// (for example, once a firmware update has begun) is closed unused.
@@ -348,6 +345,7 @@ class _HomePageState extends State<HomePage> {
       final DetectedPedal? p = await _updater.detect();
       if (p == null) {
         _addLog('No pedal answered.');
+        _workspace.pedalGone();
       }
       // Another pedal (or new firmware) answered: what was read is not
       // what it holds. No answer at all changes nothing.
@@ -535,7 +533,11 @@ class _HomePageState extends State<HomePage> {
     try {
       final String done = await run();
       _addLog(done);
-      setState(() => _presetMessage = done);
+      // Success is said and gone; only errors stay on the page.
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(done)));
+      }
     } catch (e) {
       _addLog('$task failed: $e');
       setState(() {
@@ -548,12 +550,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  /// Opens the live link when wanted and possible, and plays the selected
-  /// preset as edited.
+  /// Opens the live link when possible, and plays the selected preset as
+  /// edited. As in M-EFCS, edits always play on a connected pedal; the link
+  /// is closed around every other pedal operation.
   Future<void> _startLive() async {
     final DetectedPedal? p = _pedal;
-    if (!_wantLive ||
-        _busy ||
+    if (_busy ||
         _workspace.live != null ||
         _liveOpening != null || // one open at a time
         p == null ||
@@ -636,12 +638,6 @@ class _HomePageState extends State<HomePage> {
     if (mounted) {
       setState(() {});
     }
-  }
-
-  Future<void> _setLive(bool on) async {
-    _wantLive = on;
-    on ? await _startLive() : await _stopLive();
-    setState(() {});
   }
 
   Future<void> _readPresets() async {
@@ -976,7 +972,7 @@ class _HomePageState extends State<HomePage> {
     if (!await _confirmDiscard('Open this backup?')) {
       return;
     }
-    _workspace.load(b, name);
+    _workspace.load(b, name, fromBackup: true);
     setState(() {
       _presetMessage = null;
       _section = 0;
@@ -1131,11 +1127,7 @@ class _HomePageState extends State<HomePage> {
         message: _presetMessage,
         messageIsError: _presetError,
         onRead: _readPresets,
-        onOpen: _openPresetFile,
-        onSave: _savePresetFile,
         onWrite: _writeDraft,
-        liveOn: _workspace.live != null,
-        onLive: _setLive,
       ),
       1 => LibraryPage(
         kind: _libKind,
@@ -1247,10 +1239,10 @@ class _HomePageState extends State<HomePage> {
         : p.port.bluetooth
         ? 'Bluetooth · presets only'
         : p.presetsOnly
-        ? 'Firmware ${p.version} · presets only · ${p.port.name}'
+        ? 'Firmware ${p.version} · presets only'
         : p.inLoader
-        ? 'In update mode · ${p.port.name}'
-        : 'Firmware ${p.version} · ${p.port.name}';
+        ? 'In update mode'
+        : 'Firmware ${p.version}';
     return AppBar(
       titleSpacing: 16,
       title: Row(
@@ -1296,6 +1288,15 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       actions: <Widget>[
+        if (_section == 0)
+          ListenableBuilder(
+            listenable: _workspace,
+            builder: (BuildContext context, _) => IconButton(
+              tooltip: 'Assistant',
+              icon: const Icon(Icons.auto_awesome),
+              onPressed: !_busy && _workspace.draft != null ? _ask : null,
+            ),
+          ),
         // Plugging and unplugging are caught on their own; this is the retry.
         IconButton(
           tooltip: p == null ? 'Detect pedal' : 'Detect again',
@@ -1323,10 +1324,14 @@ class _HomePageState extends State<HomePage> {
             icon: const Icon(Icons.bug_report_outlined),
             onPressed: _askReports,
           ),
-        IconButton(
-          tooltip: 'About',
-          icon: const Icon(Icons.info_outline),
-          onPressed: () => showAboutDialog(
+        PresetsMenu(
+          workspace: _workspace,
+          busy: _busy,
+          canUsePedal: p != null && !p.inLoader,
+          onRead: _readPresets,
+          onOpen: _openPresetFile,
+          onSave: _savePresetFile,
+          onAbout: () => showAboutDialog(
             context: context,
             applicationName: 'Pocket AMP Tools',
             applicationLegalese:
@@ -1334,10 +1339,18 @@ class _HomePageState extends State<HomePage> {
                 'GPL-3.0. Update protocol from M-VAVE\'s FM1 Open '
                 'project.',
           ),
+          presetActions: _section == 0,
         ),
         const SizedBox(width: 8),
       ],
     );
+  }
+
+  Future<void> _ask() async {
+    final String? done = await showAssistant(context, _workspace);
+    if (done != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
+    }
   }
 
   Widget _firmwarePage(ThemeData theme) {

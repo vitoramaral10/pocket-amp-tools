@@ -67,6 +67,9 @@ class BlockIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color c = color ?? IconTheme.of(context).color ?? Colors.black;
+    if (block == 'EQ') {
+      return Icon(Icons.equalizer, size: size, color: c);
+    }
     if (!_drawn.contains(block)) {
       return Icon(Icons.extension_outlined, size: size, color: c);
     }

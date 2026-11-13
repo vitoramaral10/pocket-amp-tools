@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import 'dart:convert';
+import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -9,7 +11,7 @@ import '../presets/block_models.dart';
 import '../presets/live_link.dart';
 import '../presets/mefcs.dart';
 import '../presets/preset_backup.dart';
-import 'assistant_dialog.dart';
+import 'settings_page.dart';
 import 'visuals.dart';
 
 /// The bank being edited and the bank last seen on the pedal, kept while the
@@ -23,7 +25,25 @@ class PresetWorkspace extends ChangeNotifier {
 
   /// Where [draft] came from, for the header.
   String? source;
+
+  /// [draft] is one of the app's backups, not what the pedal holds, until
+  /// it is written or discarded.
+  bool fromBackup = false;
+
+  /// [draft] holds what was read from (or written to) the pedal, not a
+  /// file or backup.
+  bool _fromPedal = false;
   int selected = 0;
+
+  /// The block whose card is open, as in M-EFCS: an index into
+  /// [blockNames], or [eqBlock] for the EQ. It stays open across presets.
+  int openBlock = 1;
+  static final int eqBlock = blockNames.length;
+
+  void open(int block) {
+    openBlock = block;
+    notifyListeners();
+  }
 
   /// Set while the edits are played on the pedal as they are made.
   LiveLink? live;
@@ -92,7 +112,14 @@ class PresetWorkspace extends ChangeNotifier {
     return <int>{...diff.presets, ...diff.eq};
   }
 
-  void load(PresetBackup b, String from, {bool fromPedal = false}) {
+  void load(
+    PresetBackup b,
+    String from, {
+    bool fromPedal = false,
+    bool fromBackup = false,
+  }) {
+    this.fromBackup = fromBackup;
+    _fromPedal = fromPedal;
     _base = b.copy();
     if (fromPedal) {
       onPedal = b;
@@ -129,6 +156,8 @@ class PresetWorkspace extends ChangeNotifier {
   }
 
   void discard() {
+    fromBackup = false;
+    _fromPedal = true;
     draft = onPedal!.copy();
     _base = onPedal!.copy();
     showOnPedal();
@@ -138,6 +167,8 @@ class PresetWorkspace extends ChangeNotifier {
   /// [b] is now what the pedal holds. The pedal keeps its own identity,
   /// whatever file the presets came from.
   void written(PresetBackup b) {
+    fromBackup = false;
+    _fromPedal = true;
     _base = b.copy();
     onPedal = PresetBackup(
       identity: onPedal?.identity ?? b.identity,
@@ -146,6 +177,19 @@ class PresetWorkspace extends ChangeNotifier {
       eq: Uint8List.fromList(b.eq),
     );
     notifyListeners();
+  }
+
+  /// The pedal stopped answering. Its presets leave the editor, unless they
+  /// hold edits not yet written or saved; a file or backup stays open.
+  void pedalGone() {
+    if (!_fromPedal || unsaved.isNotEmpty) {
+      return;
+    }
+    draft = null;
+    _base = null;
+    source = null;
+    _fromPedal = false;
+    forgetPedal();
   }
 
   /// The pedal changed (another unit, or new firmware): what was read from
@@ -172,11 +216,7 @@ class PresetsPage extends StatelessWidget {
     required this.message,
     required this.messageIsError,
     required this.onRead,
-    required this.onOpen,
-    required this.onSave,
     required this.onWrite,
-    required this.liveOn,
-    required this.onLive,
   });
 
   final PresetWorkspace workspace;
@@ -187,13 +227,7 @@ class PresetsPage extends StatelessWidget {
   final String? message;
   final bool messageIsError;
   final VoidCallback onRead;
-  final VoidCallback onOpen;
-  final VoidCallback onSave;
   final VoidCallback onWrite;
-
-  /// Whether edits are played on the pedal as they are made.
-  final bool liveOn;
-  final ValueChanged<bool> onLive;
 
   @override
   Widget build(BuildContext context) {
@@ -204,12 +238,14 @@ class PresetsPage extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            _Toolbar(page: this),
+            if (_Toolbar.wanted(this)) _Toolbar(page: this),
             if (task != null)
               LinearProgressIndicator(value: fraction)
             else
               const Divider(height: 1),
             if (task == null && message != null) _MessageBar(page: this),
+            if (draft != null && workspace.fromBackup)
+              _BackupBar(page: this, draft: draft),
             Expanded(
               child: draft == null
                   ? _EmptyState(page: this)
@@ -222,91 +258,198 @@ class PresetsPage extends StatelessWidget {
   }
 }
 
+/// The presets section's actions, in one menu on the app bar: the assistant,
+/// files, reading the pedal again and moving a preset as JSON.
+class PresetsMenu extends StatelessWidget {
+  const PresetsMenu({
+    super.key,
+    required this.workspace,
+    required this.busy,
+    required this.canUsePedal,
+    required this.onRead,
+    required this.onOpen,
+    required this.onSave,
+    required this.onAbout,
+    this.presetActions = true,
+  });
+  final PresetWorkspace workspace;
+  final bool busy;
+  final bool canUsePedal;
+  final VoidCallback onRead;
+  final VoidCallback onOpen;
+  final VoidCallback onSave;
+  final VoidCallback onAbout;
+
+  /// Off outside the Presets page, where the menu only holds Settings and
+  /// About.
+  final bool presetActions;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: workspace,
+    builder: (BuildContext context, _) {
+      final bool idle = !busy;
+      final bool loaded = workspace.draft != null;
+      return MenuAnchor(
+        builder: (BuildContext context, MenuController menu, _) => IconButton(
+          tooltip: presetActions ? 'Preset actions' : 'More',
+          onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+          icon: const Icon(Icons.more_vert),
+        ),
+        menuChildren: <Widget>[
+          if (presetActions) ...<Widget>[
+            MenuItemButton(
+              leadingIcon: const Icon(Icons.folder_open),
+              onPressed: idle ? onOpen : null,
+              child: const Text('Open file…'),
+            ),
+            MenuItemButton(
+              leadingIcon: const Icon(Icons.save_alt),
+              onPressed: idle && loaded ? onSave : null,
+              child: const Text('Save file…'),
+            ),
+            MenuItemButton(
+              leadingIcon: const Icon(Icons.download_for_offline_outlined),
+              onPressed: idle && canUsePedal ? onRead : null,
+              child: const Text('Read again from pedal'),
+            ),
+            const Divider(),
+            MenuItemButton(
+              leadingIcon: const Icon(Icons.copy),
+              onPressed: loaded ? () => _copy(context) : null,
+              child: const Text('Copy preset as JSON'),
+            ),
+            MenuItemButton(
+              leadingIcon: const Icon(Icons.content_paste),
+              onPressed: idle && loaded ? () => _paste(context) : null,
+              child: const Text('Paste preset from JSON'),
+            ),
+            const Divider(),
+          ],
+          MenuItemButton(
+            leadingIcon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.push<void>(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+            ),
+            child: const Text('Settings'),
+          ),
+          MenuItemButton(
+            leadingIcon: const Icon(Icons.info_outline),
+            onPressed: onAbout,
+            child: const Text('About…'),
+          ),
+        ],
+      );
+    },
+  );
+
+  PresetBackup get draft => workspace.draft!;
+  int get id => workspace.selected;
+
+  void _edit(void Function() change) {
+    change();
+    workspace.edited();
+  }
+
+  Future<void> _copy(BuildContext context) async {
+    await Clipboard.setData(
+      ClipboardData(
+        text: const JsonEncoder.withIndent('  ')
+            .convert(draft.presetFields(id)),
+      ),
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${slotName(id)} copied as JSON.')),
+      );
+    }
+  }
+
+  Future<void> _paste(BuildContext context) async {
+    String done;
+    try {
+      final String? text = (await Clipboard.getData('text/plain'))?.text;
+      final Object? j = jsonDecode(text ?? '');
+      if (j is! Map<String, Object?>) {
+        throw const FormatException('expected one preset as a JSON object');
+      }
+      _edit(() => draft.setPresetFields(id, j));
+      workspace.showOnPedal();
+      done =
+          'Pasted into ${slotName(id)}. Nothing is on the pedal until you '
+          'write it.';
+    } on FormatException catch (e) {
+      done = 'Could not paste: ${e.message}';
+    } on PlatformException catch (e) {
+      done = 'Could not read the clipboard: ${e.message ?? e.code}';
+    }
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
+    }
+  }
+}
+
+/// Shown only when there is something to write, or a task running: the
+/// task's name on the left, discard and write on the right.
 class _Toolbar extends StatelessWidget {
   const _Toolbar({required this.page});
   final PresetsPage page;
 
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
+  static bool wanted(PresetsPage page) =>
+      page.task != null || _actions(page).isNotEmpty;
+
+  static List<Widget> _actions(PresetsPage page) {
     final PresetWorkspace w = page.workspace;
     final int changes = w.changed.length;
     final bool idle = !page.busy;
+    return <Widget>[
+      if (changes > 0) ...<Widget>[
+        TextButton(
+          onPressed: idle ? w.discard : null,
+          child: const Text('Discard changes'),
+        ),
+        FilledButton.icon(
+          onPressed: idle && page.canUsePedal ? page.onWrite : null,
+          icon: const Icon(Icons.upload),
+          label: Text(
+            changes == 1
+                ? 'Write 1 preset to pedal'
+                : 'Write $changes presets to pedal',
+          ),
+        ),
+      ] else if (w.draft != null && w.onPedal == null && page.canUsePedal)
+        FilledButton.icon(
+          onPressed: idle ? page.onWrite : null,
+          icon: const Icon(Icons.upload),
+          label: const Text('Write to pedal…'),
+        ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 16, 12),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      padding: const EdgeInsets.fromLTRB(24, 8, 16, 8),
+      child: Row(
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                Text('Presets', style: theme.textTheme.titleLarge),
-                Text(
-                  page.task ?? w.source ?? 'Nothing loaded yet',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          OutlinedButton.icon(
-            onPressed: idle && page.canUsePedal ? page.onRead : null,
-            icon: const Icon(Icons.download_for_offline_outlined),
-            label: const Text('Read from pedal'),
-          ),
-          OutlinedButton.icon(
-            onPressed: idle ? page.onOpen : null,
-            icon: const Icon(Icons.folder_open),
-            label: const Text('Open file…'),
-          ),
-          OutlinedButton.icon(
-            onPressed: idle && w.draft != null ? page.onSave : null,
-            icon: const Icon(Icons.save_alt),
-            label: const Text('Save file…'),
-          ),
-          if (w.onPedal != null && page.canUsePedal)
-            Tooltip(
-              message:
-                  'Play each change on the pedal as you make it. '
-                  'Volume and EQ are heard only after you write. '
-                  'Nothing is stored until you write.',
-              child: FilterChip(
-                selected: page.liveOn,
-                onSelected: idle ? page.onLive : null,
-                avatar: Icon(
-                  page.liveOn ? Icons.graphic_eq : Icons.volume_off_outlined,
-                  size: 18,
-                ),
-                showCheckmark: false,
-                label: Text(page.liveOn ? 'Live on pedal' : 'Live off'),
+          Expanded(
+            child: Text(
+              page.task ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-          if (changes > 0) ...<Widget>[
-            TextButton(
-              onPressed: idle ? w.discard : null,
-              child: const Text('Discard changes'),
-            ),
-            FilledButton.icon(
-              onPressed: idle && page.canUsePedal ? page.onWrite : null,
-              icon: const Icon(Icons.upload),
-              label: Text(
-                changes == 1
-                    ? 'Write 1 preset to pedal'
-                    : 'Write $changes presets to pedal',
-              ),
-            ),
-          ] else if (w.draft != null && w.onPedal == null && page.canUsePedal)
-            FilledButton.icon(
-              onPressed: idle ? page.onWrite : null,
-              icon: const Icon(Icons.upload),
-              label: const Text('Write to pedal…'),
-            ),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: _actions(page),
+          ),
         ],
       ),
     );
@@ -330,6 +473,56 @@ class _MessageBar extends StatelessWidget {
               ? c.onErrorContainer
               : c.onSecondaryContainer,
         ),
+      ),
+    );
+  }
+}
+
+/// Says the editor shows a backup, not the pedal, and offers to restore it.
+class _BackupBar extends StatelessWidget {
+  const _BackupBar({required this.page, required this.draft});
+  final PresetsPage page;
+  final PresetBackup draft;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme c = theme.colorScheme;
+    return Container(
+      color: c.tertiaryContainer,
+      padding: const EdgeInsets.fromLTRB(24, 8, 16, 8),
+      child: Row(
+        children: <Widget>[
+          Icon(Icons.history, color: c.onTertiaryContainer),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Viewing a backup from '
+              '${draft.created.toLocal().toString().substring(0, 16)}, not '
+              'the pedal. Nothing changes on the pedal until you restore it.',
+              style: TextStyle(color: c.onTertiaryContainer),
+            ),
+          ),
+          const SizedBox(width: 12),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: c.onTertiaryContainer),
+            // With nothing read yet there is no pedal copy to go back to.
+            onPressed: page.busy
+                ? null
+                : page.workspace.onPedal != null
+                ? page.workspace.discard
+                : page.canUsePedal
+                ? page.onRead
+                : null,
+            child: const Text('Back to the pedal'),
+          ),
+          const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: !page.busy && page.canUsePedal ? page.onWrite : null,
+            icon: const Icon(Icons.upload),
+            label: const Text('Restore to pedal…'),
+          ),
+        ],
       ),
     );
   }
@@ -380,7 +573,6 @@ class _Editor extends StatelessWidget {
           id: workspace.selected,
           enabled: !busy,
           showPicker: box.maxWidth < 760,
-          changed: changed,
         );
         if (box.maxWidth < 760) {
           return detail;
@@ -492,195 +684,118 @@ class _Detail extends StatelessWidget {
     required this.id,
     required this.enabled,
     required this.showPicker,
-    required this.changed,
   });
   final PresetWorkspace workspace;
   final PresetBackup draft;
   final int id;
   final bool enabled;
   final bool showPicker;
-  final Set<int> changed;
 
   void _edit(void Function() change) {
     change();
     workspace.edited();
   }
 
-  Future<void> _copy(BuildContext context) async {
-    await Clipboard.setData(
-      ClipboardData(
-        text: const JsonEncoder.withIndent('  ')
-            .convert(draft.presetFields(id)),
-      ),
-    );
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${slotName(id)} copied as JSON.')),
-      );
-    }
-  }
-
-  Future<void> _paste(BuildContext context) async {
-    String done;
-    try {
-      final String? text = (await Clipboard.getData('text/plain'))?.text;
-      final Object? j = jsonDecode(text ?? '');
-      if (j is! Map<String, Object?>) {
-        throw const FormatException('expected one preset as a JSON object');
-      }
-      _edit(() => draft.setPresetFields(id, j));
-      workspace.showOnPedal();
-      done =
-          'Pasted into ${slotName(id)}. Nothing is on the pedal until you '
-          'write it.';
-    } on FormatException catch (e) {
-      done = 'Could not paste: ${e.message}';
-    } on PlatformException catch (e) {
-      done = 'Could not read the clipboard: ${e.message ?? e.code}';
-    }
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            if (showPicker)
-              DropdownButton<int>(
-                value: id,
-                underline: const SizedBox(),
-                style: theme.textTheme.headlineSmall,
-                items: <DropdownMenuItem<int>>[
-                  for (int i = 0; i < presetCount; i++)
-                    DropdownMenuItem<int>(value: i, child: Text(slotName(i))),
-                ],
-                onChanged: (int? v) => workspace.select(v!),
-              )
-            else
-              Text(slotName(id), style: theme.textTheme.headlineSmall),
-            Expanded(
-              child: changed.contains(id)
-                  ? Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 12),
-                        child: Chip(
-                          label: const Text(
-                            'Not on the pedal yet',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          visualDensity: VisualDensity.compact,
-                          side: BorderSide.none,
-                          backgroundColor: theme.colorScheme.primaryContainer,
-                        ),
-                      ),
-                    )
-                  : const SizedBox(),
-            ),
-            IconButton(
-              tooltip: 'Ask the assistant',
-              onPressed: enabled
-                  ? () async {
-                      final String? done = await showAssistant(
-                        context,
-                        workspace,
-                      );
-                      if (done != null && context.mounted) {
-                        ScaffoldMessenger.of(context)
-                            .showSnackBar(SnackBar(content: Text(done)));
-                      }
-                    }
-                  : null,
-              icon: const Icon(Icons.auto_awesome),
-            ),
-            IconButton(
-              tooltip: 'Copy this preset as JSON',
-              onPressed: () => _copy(context),
-              icon: const Icon(Icons.copy),
-            ),
-            IconButton(
-              tooltip: 'Paste a preset from JSON',
-              onPressed: enabled ? () => _paste(context) : null,
-              icon: const Icon(Icons.content_paste),
-            ),
-          ],
+    final int open = workspace.openBlock;
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints box) => ListView(
+        // The content is a column at most 1040 wide, centred on the page.
+        padding: EdgeInsets.fromLTRB(
+          math.max(24, (box.maxWidth - 1040) / 2),
+          16,
+          math.max(24, (box.maxWidth - 1040) / 2),
+          32,
         ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
-            child: _LabeledSlider(
-              label: 'Volume',
-              value: draft.volume(id),
-              max: 100,
-              onChanged: enabled
-                  ? (int v) => _edit(() => draft.setVolume(id, v))
-                  : null,
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text('Signal chain', style: theme.textTheme.titleSmall),
-        const SizedBox(height: 4),
-        Text(
-          'Drag to change the order. The guitar enters on the left; FX and '
-          'AMP stay first.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 8),
-        _ChainRow(
-          draft: draft,
-          id: id,
-          enabled: enabled,
-          label: workspace.modelLabel,
-          onReorder: (List<int> order) {
-            if (!pedalTakesChain(order)) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    'The pedal keeps FX and AMP at the start of the chain; '
-                    'the other four can go in any order.',
-                  ),
-                ),
-              );
-              return;
-            }
-            _edit(() => draft.setChain(id, order));
-            workspace.live?.chain(order);
-          },
-        ),
-        const SizedBox(height: 20),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: <Widget>[
-            for (final int b in <int>{
-              ...draft.chain(id).where((int b) => b < blockNames.length),
-              for (int b = 0; b < blockNames.length; b++) b,
-            })
-              _BlockCard(
-                workspace: workspace,
-                draft: draft,
-                id: id,
-                block: b,
-                enabled: enabled,
-                edit: _edit,
-              ),
-            _EqCard(draft: draft, id: id, enabled: enabled, edit: _edit),
-          ],
-        ),
-      ],
+        children: _children(context, theme, open),
+      ),
     );
   }
+
+  List<Widget> _children(
+    BuildContext context,
+    ThemeData theme,
+    int open,
+  ) => <Widget>[
+    Row(
+      children: <Widget>[
+        if (showPicker)
+          DropdownButton<int>(
+            value: id,
+            underline: const SizedBox(),
+            style: theme.textTheme.headlineSmall,
+            items: <DropdownMenuItem<int>>[
+              for (int i = 0; i < presetCount; i++)
+                DropdownMenuItem<int>(value: i, child: Text(slotName(i))),
+            ],
+            onChanged: (int? v) => workspace.select(v!),
+          ),
+        // The list beside it already names the preset; volume takes the room.
+        Expanded(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: _LabeledSlider(
+                label: 'Preset volume',
+                value: draft.volume(id),
+                max: 100,
+                onChanged: enabled
+                    ? (int v) => _edit(() => draft.setVolume(id, v))
+                    : null,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: 16),
+    _ChainRow(
+      draft: draft,
+      id: id,
+      enabled: enabled,
+      label: workspace.modelLabel,
+      open: open,
+      onOpen: workspace.open,
+      onReorder: (List<int> order) {
+        if (!pedalTakesChain(order)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'The pedal keeps FX and AMP at the start of the chain; '
+                'the other four can go in any order.',
+              ),
+            ),
+          );
+          return;
+        }
+        _edit(() => draft.setChain(id, order));
+        workspace.live?.chain(order);
+      },
+    ),
+    const SizedBox(height: 20),
+    Align(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: SizedBox(
+          width: double.infinity,
+          child: open < blockNames.length
+              ? _BlockCard(
+                  // A new card per block, so no state carries over.
+                  key: ValueKey<int>(open),
+                  workspace: workspace,
+                  draft: draft,
+                  id: id,
+                  block: open,
+                  enabled: enabled,
+                  edit: _edit,
+                )
+              : _EqCard(draft: draft, id: id, enabled: enabled, edit: _edit),
+        ),
+      ),
+    ),
+  ];
 }
 
 class _ChainRow extends StatelessWidget {
@@ -690,61 +805,123 @@ class _ChainRow extends StatelessWidget {
     required this.enabled,
     required this.onReorder,
     required this.label,
+    required this.open,
+    required this.onOpen,
   });
   final PresetBackup draft;
   final int id;
   final bool enabled;
   final void Function(List<int> order) onReorder;
   final String Function(String block, int model) label;
+  final int open;
+  final ValueChanged<int> onOpen;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final List<int> order = draft.chain(id);
+    final bool eqHead = draft.eqAtHead(id);
+    // EQ is not dragged: its place is the Head/Tail switch on its card.
+    final Widget eq = Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: _ChainChip(
+        name: 'EQ',
+        model: eqHead ? 'Head' : 'Tail',
+        on: draft.eqOn(id),
+        selected: open == PresetWorkspace.eqBlock,
+        onTap: () => onOpen(PresetWorkspace.eqBlock),
+        theme: theme,
+      ),
+    );
     return SizedBox(
       height: 64,
-      child: ReorderableListView(
-        scrollDirection: Axis.horizontal,
-        buildDefaultDragHandles: enabled,
-        onReorderItem: (int from, int to) {
-          final List<int> next = List<int>.of(order);
-          next.insert(to, next.removeAt(from));
-          onReorder(next);
-        },
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          for (final (int i, int b) in order.indexed)
-            Padding(
-              // A block normally appears once; the count keeps keys unique
-              // if a stored chain repeats one.
-              key: ValueKey<int>(
-                b + 256 * order.take(i).where((int x) => x == b).length,
-              ),
-              padding: const EdgeInsets.only(right: 8),
-              child: _ChainChip(
-                name: b < blockNames.length ? blockNames[b] : 'Block $b',
-                model: b < blockNames.length
-                    ? label(blockNames[b], draft.model(id, b))
-                    : '',
-                on: b < blockNames.length && draft.isOn(id, b),
-                theme: theme,
-              ),
-            ),
+          if (eqHead) eq,
+          Flexible(child: _blocks(theme, order)),
+          if (!eqHead) eq,
         ],
       ),
     );
   }
+
+  Widget _blocks(ThemeData theme, List<int> order) => ReorderableListView(
+    shrinkWrap: true,
+    scrollDirection: Axis.horizontal,
+    // The default desktop handle is an icon drawn over the chip's text;
+    // the whole chip is the handle instead.
+    buildDefaultDragHandles: false,
+    onReorderItem: (int from, int to) {
+      final List<int> next = List<int>.of(order);
+      next.insert(to, next.removeAt(from));
+      onReorder(next);
+    },
+    children: <Widget>[
+      for (final (int i, int b) in order.indexed)
+        Padding(
+          // A block normally appears once; the count keeps keys unique
+          // if a stored chain repeats one.
+          key: ValueKey<int>(
+            b + 256 * order.take(i).where((int x) => x == b).length,
+          ),
+          padding: const EdgeInsets.only(right: 8),
+          child: _dragHandle(
+            index: i,
+            enabled: enabled,
+            child: _ChainChip(
+              name: b < blockNames.length ? blockNames[b] : 'Block $b',
+              model: b < blockNames.length
+                  ? label(blockNames[b], draft.model(id, b))
+                  : '',
+              on: b < blockNames.length && draft.isOn(id, b),
+              selected: b == open,
+              onTap: b < blockNames.length ? () => onOpen(b) : null,
+              theme: theme,
+            ),
+          ),
+        ),
+    ],
+  );
 }
+
+/// Touch drags after a long press so the row still scrolls; a mouse drags
+/// at once, as the default handles do.
+Widget _dragHandle({
+  required int index,
+  required bool enabled,
+  required Widget child,
+}) => switch (defaultTargetPlatform) {
+  TargetPlatform.android ||
+  TargetPlatform.iOS ||
+  TargetPlatform.fuchsia => ReorderableDelayedDragStartListener(
+    index: index,
+    enabled: enabled,
+    child: child,
+  ),
+  _ => ReorderableDragStartListener(
+    index: index,
+    enabled: enabled,
+    child: child,
+  ),
+};
 
 class _ChainChip extends StatelessWidget {
   const _ChainChip({
     required this.name,
     required this.model,
     required this.on,
+    required this.selected,
+    required this.onTap,
     required this.theme,
   });
   final String name;
   final String model;
   final bool on;
+
+  /// Its card is the one open below.
+  final bool selected;
+  final VoidCallback? onTap;
   final ThemeData theme;
 
   @override
@@ -758,35 +935,51 @@ class _ChainChip extends StatelessWidget {
     final Color fg = on
         ? Colors.white
         : blockInk(name, theme.brightness) ?? block;
-    return Container(
-      width: 120,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    final Widget chip = Container(
+      width: 132,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
         color: on ? block : block.withValues(alpha: dark ? 0.22 : 0.14),
         borderRadius: BorderRadius.circular(12),
-        border: on ? null : Border.all(color: block.withValues(alpha: 0.45)),
+        border: selected
+            ? Border.all(color: c.onSurface, width: 2)
+            : on
+            ? null
+            : Border.all(color: block.withValues(alpha: 0.45)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+      child: Row(
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              BlockIcon(name, size: 16, color: fg),
-              const SizedBox(width: 6),
-              Text(
-                name,
-                style: theme.textTheme.labelLarge?.copyWith(color: fg),
-              ),
-            ],
-          ),
-          Text(
-            on ? model : 'off',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(color: fg),
+          BlockIcon(name, size: 28, color: fg),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  style: theme.textTheme.labelLarge?.copyWith(color: fg),
+                ),
+                Text(
+                  on ? model : 'off',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(color: fg),
+                ),
+              ],
+            ),
           ),
         ],
+      ),
+    );
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: MouseRegion(
+        cursor: onTap == null ? MouseCursor.defer : SystemMouseCursors.click,
+        child: GestureDetector(onTap: onTap, child: chip),
       ),
     );
   }
@@ -794,6 +987,7 @@ class _ChainChip extends StatelessWidget {
 
 class _BlockCard extends StatelessWidget {
   const _BlockCard({
+    super.key,
     required this.workspace,
     required this.draft,
     required this.id,
@@ -892,6 +1086,18 @@ class _BlockCard extends StatelessWidget {
   }
 }
 
+/// Whether the app can write preset [id]'s EQ record back. Some stored
+/// records are not in a form Save EQ takes; they are kept as they are
+/// unless the user resets them.
+bool _eqWritable(PresetBackup draft, int id) {
+  try {
+    saveEqPacket(id, draft.eqRecord(id));
+    return true;
+  } on ArgumentError {
+    return false;
+  }
+}
+
 class _EqCard extends StatelessWidget {
   const _EqCard({
     required this.draft,
@@ -904,17 +1110,7 @@ class _EqCard extends StatelessWidget {
   final bool enabled;
   final void Function(void Function() change) edit;
 
-  /// Whether the app can write this preset's EQ record back. Some stored
-  /// records are not in a form Save EQ takes; they are kept as they are
-  /// unless the user resets them.
-  bool get _writable {
-    try {
-      saveEqPacket(id, draft.eqRecord(id));
-      return true;
-    } on ArgumentError {
-      return false;
-    }
-  }
+  bool get _writable => _eqWritable(draft, id);
 
   @override
   Widget build(BuildContext context) => Theme(
@@ -1041,7 +1237,7 @@ class _LabeledSlider extends StatelessWidget {
     return Row(
       children: <Widget>[
         SizedBox(
-          width: dense ? 84 : 96,
+          width: dense ? 84 : 120,
           child: Text(label, style: theme.textTheme.bodyMedium),
         ),
         Expanded(

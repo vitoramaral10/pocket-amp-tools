@@ -20,10 +20,14 @@ import '../presets/preset_backup.dart' show knobLabels, knobNames;
 
 class AssistantSettings {
   const AssistantSettings({
+    this.provider = '',
     this.baseUrl = '',
     this.model = '',
     this.apiKey = '',
   });
+
+  /// The [AiProvider.id] picked in Settings, or empty for a custom address.
+  final String provider;
 
   /// e.g. `https://api.example.com/v1`; `/chat/completions` is added.
   final String baseUrl;
@@ -71,6 +75,7 @@ class AssistantSettings {
       final Object? j = jsonDecode(await (await _file()).readAsString());
       if (j is Map<String, Object?>) {
         return AssistantSettings(
+          provider: j['provider'] as String? ?? '',
           baseUrl: j['baseUrl'] as String? ?? '',
           model: j['model'] as String? ?? '',
           apiKey: j['apiKey'] as String? ?? '',
@@ -98,6 +103,7 @@ class AssistantSettings {
     }
     await tmp.writeAsString(
       jsonEncode(<String, String>{
+        'provider': provider,
         'baseUrl': baseUrl.trim(),
         'model': model.trim(),
         'apiKey': apiKey.trim(),

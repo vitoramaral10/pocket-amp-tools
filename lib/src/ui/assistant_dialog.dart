@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../assistant/assistant.dart';
 import '../presets/preset_backup.dart';
 import 'presets_page.dart';
+import 'settings_page.dart';
 
 /// Asks the assistant to change the selected preset. The answer goes into
 /// the editor (and is heard live when live editing is on); nothing is
@@ -27,36 +28,38 @@ class _AssistantDialog extends StatefulWidget {
 
 class _AssistantDialogState extends State<_AssistantDialog> {
   final TextEditingController _request = TextEditingController();
-  final TextEditingController _url = TextEditingController();
-  final TextEditingController _model = TextEditingController();
-  final TextEditingController _key = TextEditingController();
-  bool _loaded = false;
-  bool _showSettings = false;
+
+  /// As saved in Settings; null while loading.
+  AssistantSettings? _settings;
   bool _asking = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
-    AssistantSettings.load().then((AssistantSettings s) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _url.text = s.baseUrl;
-        _model.text = s.model;
-        _key.text = s.apiKey;
-        _showSettings = !s.ready;
-        _loaded = true;
-      });
-    });
+    _load();
   }
 
-  AssistantSettings get _settings => AssistantSettings(
-    baseUrl: _url.text,
-    model: _model.text,
-    apiKey: _key.text,
-  );
+  @override
+  void dispose() {
+    _request.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    final AssistantSettings s = await AssistantSettings.load();
+    if (mounted) {
+      setState(() => _settings = s);
+    }
+  }
+
+  Future<void> _openSettings() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
+    );
+    await _load();
+  }
 
   Future<void> _ask() async {
     final PresetWorkspace w = widget.workspace;
@@ -67,7 +70,6 @@ class _AssistantDialogState extends State<_AssistantDialog> {
       _error = null;
     });
     try {
-      await _settings.save();
       final Map<String, Object> current = draft.presetFields(id);
       try {
         // Checked before asking: a preset the editor cannot take back would
@@ -81,7 +83,7 @@ class _AssistantDialogState extends State<_AssistantDialog> {
         return;
       }
       final Map<String, Object?> answer = await askAssistant(
-        _settings,
+        _settings!,
         _request.text.trim(),
         current,
       );
@@ -132,7 +134,7 @@ class _AssistantDialogState extends State<_AssistantDialog> {
       ),
       content: SizedBox(
         width: 480,
-        child: !_loaded
+        child: _settings == null
             ? const SizedBox(
                 height: 80,
                 child: Center(child: CircularProgressIndicator()),
@@ -141,57 +143,41 @@ class _AssistantDialogState extends State<_AssistantDialog> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  TextField(
-                    controller: _request,
-                    autofocus: true,
-                    minLines: 2,
-                    maxLines: 5,
-                    decoration: const InputDecoration(
-                      labelText: 'What should it sound like?',
-                      hintText:
-                          'e.g. less gain, a short slapback delay, '
-                          'brighter for a single-coil guitar',
-                      border: OutlineInputBorder(),
+                  if (!_settings!.ready) ...<Widget>[
+                    Text(
+                      'The assistant needs a service to ask. Set its address '
+                      'and model in Settings.',
+                      style: theme.textTheme.bodyMedium,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'The request and this preset are sent to the service set '
-                    'below. The answer replaces the preset in the editor; '
-                    'nothing is stored on the pedal until you write.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(
+                    Align(
                       alignment: Alignment.centerLeft,
-                    ),
-                    onPressed: () =>
-                        setState(() => _showSettings = !_showSettings),
-                    icon: Icon(
-                      _showSettings ? Icons.expand_less : Icons.expand_more,
-                    ),
-                    label: const Text('Assistant settings'),
-                  ),
-                  if (_showSettings) ...<Widget>[
-                    TextField(
-                      controller: _url,
-                      decoration: const InputDecoration(
-                        labelText: 'Address (OpenAI-compatible)',
-                        hintText: 'https://…/v1',
+                      child: TextButton.icon(
+                        onPressed: _openSettings,
+                        icon: const Icon(Icons.settings_outlined),
+                        label: const Text('Open settings'),
                       ),
                     ),
+                  ] else ...<Widget>[
                     TextField(
-                      controller: _model,
-                      decoration: const InputDecoration(labelText: 'Model'),
-                    ),
-                    TextField(
-                      controller: _key,
-                      obscureText: true,
+                      controller: _request,
+                      autofocus: true,
+                      minLines: 2,
+                      maxLines: 5,
                       decoration: const InputDecoration(
-                        labelText: 'API key (if the service needs one)',
-                        helperText: 'Kept on this computer, in plain text.',
+                        labelText: 'What should it sound like?',
+                        hintText:
+                            'e.g. less gain, a short slapback delay, '
+                            'brighter for a single-coil guitar',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'The request and this preset are sent to the service '
+                      'set in Settings. The answer replaces the preset in the '
+                      'editor; nothing is stored on the pedal until you write.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
@@ -212,7 +198,7 @@ class _AssistantDialogState extends State<_AssistantDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton.icon(
-          onPressed: _asking || !_loaded ? null : _ask,
+          onPressed: _asking || !(_settings?.ready ?? false) ? null : _ask,
           icon: _asking
               ? const SizedBox.square(
                   dimension: 18,
