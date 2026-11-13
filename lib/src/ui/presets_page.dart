@@ -847,7 +847,7 @@ List<(String, String)> get _shortcuts => <(String, String)>[
   (_ctrlLabel('Shift+C'), 'Copy the preset as JSON'),
   (_ctrlLabel('Shift+V'), 'Paste a preset from JSON'),
   (_ctrlLabel('O'), 'Open a file'),
-  (_ctrlLabel('S'), 'Write to the pedal (asks first)'),
+  (_ctrlLabel('S'), 'Write to the pedal'),
   (_ctrlLabel('Shift+S'), 'Save to a file'),
   (_ctrlLabel('Z'), 'Discard all changes'),
   (_ctrlLabel('R'), 'Read again from the pedal'),

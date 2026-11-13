@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 
 import '../assistant/assistant.dart';
 import '../assistant/providers.dart';
+import 'editor_settings.dart';
 
 /// The app's settings, one card per subject.
 class SettingsPage extends StatelessWidget {
@@ -26,6 +27,15 @@ class SettingsPage extends StatelessWidget {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 640),
             child: const AssistantSettingsCard(),
+          ),
+        ),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 640),
+            child: const Padding(
+              padding: EdgeInsets.only(top: 16),
+              child: EditorSettingsCard(),
+            ),
           ),
         ),
         if (log != null)

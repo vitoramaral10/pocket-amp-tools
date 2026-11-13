@@ -150,7 +150,8 @@ void main() {
       reason: 'the change is heard right away',
     );
     await tester.tap(find.text('Write 1 preset to pedal'));
-    await tester.pumpAndSettle();
+    // The setting for asking first is read from disk.
+    await settle();
     expect(find.text('Write presets to the pedal?'), findsOneWidget);
     await tester.tap(find.text('Write'));
     await settle();
