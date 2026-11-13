@@ -1,7 +1,7 @@
 name: pocket_amp_tools
 description: "Firmware updater and preset editor for the M-VAVE Pocket AMP, over USB-MIDI and Bluetooth."
 publish_to: 'none'
-version: 0.2.0+2
+version: 0.3.0+3
 
 environment:
   sdk: ^3.13.5
