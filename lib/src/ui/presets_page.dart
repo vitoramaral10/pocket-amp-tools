@@ -354,6 +354,11 @@ class PresetsMenu extends StatelessWidget {
               onPressed: idle && editable ? () => _paste(context) : null,
               child: const Text('Paste preset from JSON'),
             ),
+            MenuItemButton(
+              leadingIcon: const Icon(Icons.keyboard_outlined),
+              onPressed: loaded ? () => _showShortcuts(context) : null,
+              child: const Text('Keyboard shortcuts'),
+            ),
             const Divider(),
           ],
           MenuItemButton(
@@ -600,6 +605,38 @@ class _Editor extends StatelessWidget {
       for (int id = 0; id < draft.usableCount; id++)
         if (workspace.details.matches(id)) id,
     ];
+    // A focused slider or text field keeps its own arrow keys.
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+            _step(shown, -1),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+            _step(shown, 1),
+        const CharacterActivator('?'): () => _showShortcuts(context),
+        // Any slot, whatever the filter shows.
+        const SingleActivator(LogicalKeyboardKey.f2): () async {
+          final int? id = await _askSlot(context, draft.usableCount);
+          if (id != null) {
+            workspace.select(id);
+          }
+        },
+      },
+      child: Focus(autofocus: true, child: _layout(changed, shown)),
+    );
+  }
+
+  /// Selects the next ([by] 1) or previous (-1) slot the filter shows.
+  void _step(List<int> shown, int by) {
+    final int at = workspace.selected;
+    final Iterable<int> ahead = by > 0
+        ? shown.where((int id) => id > at)
+        : shown.reversed.where((int id) => id < at);
+    if (ahead.isNotEmpty) {
+      workspace.select(ahead.first);
+    }
+  }
+
+  Widget _layout(Set<int> changed, List<int> shown) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints box) {
         final _Detail detail = _Detail(
@@ -642,7 +679,115 @@ List<String> _onBlocks(PresetBackup d, int id) => <String>[
     if (b < blockNames.length && d.isOn(id, b)) blockNames[b],
 ];
 
-class _PresetList extends StatelessWidget {
+/// `15`, `P15` or `p15` to its slot index; null outside the first [count].
+int? parseSlot(String text, [int count = presetCount]) {
+  final String t = text.trim();
+  final int? n = int.tryParse(
+    t.startsWith(RegExp('[pP]')) ? t.substring(1) : t,
+  );
+  return n != null && n >= 1 && n <= count ? n - 1 : null;
+}
+
+/// The editor's keys, shown from the menu or with `?`.
+const List<(String, String)> _shortcuts = <(String, String)>[
+  ('←', 'Previous preset'),
+  ('→', 'Next preset'),
+  ('F2', 'Go to a preset by number'),
+  ('?', 'Show these shortcuts'),
+];
+
+Future<void> _showShortcuts(BuildContext context) {
+  final ThemeData theme = Theme.of(context);
+  return showDialog<void>(
+    context: context,
+    builder: (BuildContext context) => AlertDialog(
+      icon: const Icon(Icons.keyboard_outlined),
+      title: const Text('Keyboard shortcuts'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          for (final (String key, String what) in _shortcuts)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: <Widget>[
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 40),
+                    alignment: Alignment.center,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(key, style: theme.textTheme.labelLarge),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(what),
+                ],
+              ),
+            ),
+          const SizedBox(height: 8),
+          Text(
+            'Arrows change presets unless a knob or text field has focus.',
+            style: theme.textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<int?> _askSlot(BuildContext context, int count) {
+  final TextEditingController text = TextEditingController();
+  return showDialog<int>(
+    context: context,
+    builder: (BuildContext context) => ValueListenableBuilder<TextEditingValue>(
+      valueListenable: text,
+      builder: (BuildContext context, TextEditingValue v, _) {
+        final int? id = parseSlot(v.text, count);
+        void go() => Navigator.pop(context, id);
+        return AlertDialog(
+          title: const Text('Go to preset'),
+          content: TextField(
+            controller: text,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            onSubmitted: id == null ? null : (_) => go(),
+            decoration: InputDecoration(
+              labelText: 'Preset number',
+              hintText: '1 to $count',
+              border: const OutlineInputBorder(),
+              errorText: v.text.trim().isEmpty || id != null
+                  ? null
+                  : 'From 1 to $count',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: id == null ? null : go,
+              child: const Text('Go'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+class _PresetList extends StatefulWidget {
   const _PresetList({
     required this.workspace,
     required this.draft,
@@ -655,8 +800,45 @@ class _PresetList extends StatelessWidget {
   final Set<int> changed;
 
   @override
+  State<_PresetList> createState() => _PresetListState();
+}
+
+class _PresetListState extends State<_PresetList> {
+  static const double _row = 60;
+  final ScrollController _scroll = ScrollController();
+
+  PresetWorkspace get workspace => widget.workspace;
+  PresetBackup get draft => widget.draft;
+  List<int> get shown => widget.shown;
+  Set<int> get changed => widget.changed;
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  /// Brings the selected preset into view, as it changes from the keyboard.
+  void _reveal() {
+    final int row = shown.indexOf(workspace.selected);
+    if (!_scroll.hasClients || row < 0) {
+      return;
+    }
+    final ScrollPosition p = _scroll.position;
+    final double top = row * _row;
+    if (top < p.pixels) {
+      _scroll.jumpTo(top);
+    } else if (top + _row > p.pixels + p.viewportDimension) {
+      _scroll.jumpTo(
+        (top + _row - p.viewportDimension).clamp(0, p.maxScrollExtent),
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _reveal());
     final PresetDetails details = workspace.details;
     final TextStyle? quiet = theme.textTheme.bodySmall?.copyWith(
       color: theme.colorScheme.onSurfaceVariant,
@@ -700,9 +882,10 @@ class _PresetList extends StatelessWidget {
 
   Widget _list(ThemeData theme, PresetDetails details) {
     return ListView.builder(
+      controller: _scroll,
       padding: const EdgeInsets.only(bottom: 8),
       itemCount: shown.length,
-      itemExtent: 60,
+      itemExtent: _row,
       itemBuilder: (BuildContext context, int row) {
         final int id = shown[row];
         final PresetMeta meta = details.metas[id];
