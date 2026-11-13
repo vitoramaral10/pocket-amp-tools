@@ -260,6 +260,18 @@ class PresetsPage extends StatelessWidget {
       }
     }
 
+    // The open block, when it can be edited as its card allows (not EQ).
+    final int id = workspace.selected;
+    final int block = workspace.openBlock;
+    final bool editable =
+        !busy && draft != null && !draft.oldLayout && block < blockNames.length;
+    void nextModel(int by) {
+      if (editable) {
+        final int n = blockModels[blockNames[block]]!.length;
+        workspace.changeModel(id, block, (draft.model(id, block) + by) % n);
+      }
+    }
+
     return <ShortcutActivator, VoidCallback>{
       const SingleActivator(LogicalKeyboardKey.arrowLeft): () => move(-1),
       const SingleActivator(LogicalKeyboardKey.arrowUp): () => move(-1),
@@ -289,6 +301,16 @@ class PresetsPage extends StatelessWidget {
             workspace.open(chips[n - 1]);
           }
         },
+      const SingleActivator(LogicalKeyboardKey.space): () {
+        if (editable) {
+          final bool on = !draft.isOn(id, block);
+          draft.setOn(id, block, on);
+          workspace.edited();
+          workspace.live?.toggle(block, on);
+        }
+      },
+      const CharacterActivator('['): () => nextModel(-1),
+      const CharacterActivator(']'): () => nextModel(1),
       const CharacterActivator('?'): () => _showShortcuts(context),
       // Enabled as in the menu.
       _ctrl(LogicalKeyboardKey.keyO): () {
@@ -774,6 +796,8 @@ List<(String, String)> get _shortcuts => <(String, String)>[
   ('Home End', 'First or last preset'),
   ('F2', 'Go to a preset by number'),
   ('1 – 7', 'Open a block, counting from the left of the chain'),
+  ('Space', 'Turn the open block on or off'),
+  ('[ ]', 'Previous or next model of the open block'),
   (_ctrlLabel('O'), 'Open a file'),
   (_ctrlLabel('S'), 'Save to a file'),
   (_ctrlLabel('R'), 'Read again from the pedal'),

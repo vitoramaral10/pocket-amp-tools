@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pocket_amp_tools/src/presets/block_models.dart';
 import 'package:pocket_amp_tools/src/presets/mefcs.dart';
 import 'package:pocket_amp_tools/src/presets/preset_backup.dart';
 import 'package:pocket_amp_tools/src/presets/preset_meta.dart';
@@ -220,6 +221,29 @@ void main() {
     }
     await tester.sendKeyEvent(LogicalKeyboardKey.digit9, character: '9');
     expect(w.openBlock, chips.last, reason: 'no ninth chip');
+  });
+
+  testWidgets('Space turns the open block off and on, [ ] change its model', (
+    WidgetTester tester,
+  ) async {
+    final PresetWorkspace w = await _open(tester);
+    final PresetBackup d = w.draft!;
+    const int amp = 1;
+    w.open(amp);
+    final bool on = d.isOn(0, amp);
+    final int model = d.model(0, amp);
+    final int n = blockModels['AMP']!.length;
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    expect(d.isOn(0, amp), !on);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    expect(d.isOn(0, amp), on);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight, character: ']');
+    expect(d.model(0, amp), (model + 1) % n);
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft, character: '[');
+    await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft, character: '[');
+    expect(d.model(0, amp), (model - 1) % n, reason: 'wraps around');
   });
 
   testWidgets('each chain chip shows the number key that opens it', (
