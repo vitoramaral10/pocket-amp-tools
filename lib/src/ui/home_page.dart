@@ -66,6 +66,10 @@ class _HomePageState extends State<HomePage> {
   bool _detecting = false;
   bool _detectedOnce = false;
 
+  /// Watches the port list so plugging or unplugging the pedal needs no click.
+  Timer? _portWatch;
+  Set<String>? _lastPorts;
+
   _Stage _stage = _Stage.idle;
   UpdateProgress? _progress;
   String? _resultMessage;
@@ -115,6 +119,9 @@ class _HomePageState extends State<HomePage> {
     // Detection only sends the identity query, so it is safe to run unasked.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       unawaited(_detect());
+      _portWatch = Timer.periodic(const Duration(seconds: 2), (_) {
+        unawaited(_watchPorts(backend));
+      });
       if (!await onboardingSeen()) {
         if (mounted) {
           await showOnboarding(context);
@@ -135,6 +142,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _portWatch?.cancel();
     _stopLive();
     _workspace.dispose();
     _lifecycle.dispose();
@@ -371,6 +379,41 @@ class _HomePageState extends State<HomePage> {
       } else {
         await _startLive();
       }
+    }
+  }
+
+  /// Detects again when a port appears while no pedal is known, or when the
+  /// known pedal's port goes away. Listing ports opens none of them.
+  Future<void> _watchPorts(MidiBackend backend) async {
+    if (_busy) {
+      _lastPorts = null; // an update reboots the pedal: start over after it
+      return;
+    }
+    final Set<String> now;
+    try {
+      now = <String>{
+        for (final MidiPortRef p in await backend.listPorts())
+          '${p.id}|${p.name}',
+      };
+    } catch (_) {
+      return;
+    }
+    final Set<String>? before = _lastPorts;
+    _lastPorts = now;
+    if (before == null || _busy || !mounted) {
+      return;
+    }
+    final DetectedPedal? p = _pedal;
+    final bool changed = p == null
+        ? now.difference(before).isNotEmpty
+        : !now.contains('${p.port.id}|${p.port.name}');
+    if (changed) {
+      _addLog(
+        p == null
+            ? 'New MIDI port, looking for the pedal.'
+            : 'Pedal port gone.',
+      );
+      await _detect();
     }
   }
 
@@ -1253,26 +1296,12 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       actions: <Widget>[
-        if (MediaQuery.sizeOf(context).width >= 720)
-          // Material 2 stretches app bar actions to the bar's full height.
-          Center(
-            child: FilledButton.tonalIcon(
-              onPressed: _busy ? null : _detect,
-              icon: _detecting
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh),
-              label: Text(p == null ? 'Detect pedal' : 'Detect again'),
-            ),
-          )
-        else
-          IconButton.filledTonal(
-            tooltip: p == null ? 'Detect pedal' : 'Detect again',
-            onPressed: _busy ? null : _detect,
-            icon: const Icon(Icons.refresh),
-          ),
+        // Plugging and unplugging are caught on their own; this is the retry.
+        IconButton(
+          tooltip: p == null ? 'Detect pedal' : 'Detect again',
+          onPressed: _busy ? null : _detect,
+          icon: const Icon(Icons.refresh),
+        ),
         const SizedBox(width: 4),
         IconButton(
           tooltip: 'Log',

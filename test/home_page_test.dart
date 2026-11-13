@@ -37,7 +37,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('1.03'), findsOneWidget);
-      expect(find.text('Detect again'), findsOneWidget);
+      expect(find.byTooltip('Detect again'), findsOneWidget);
       expect(tester.widget<ButtonStyleButton>(update).onPressed, isNull);
       // Let the presets read that starts on detection finish.
       for (int i = 0; i < 400; i++) {
@@ -188,7 +188,7 @@ void main() {
     pedal
       ..hold = Completer<void>()
       ..holdAt = before + 2; // detection's open, then the live link's
-    await tester.tap(find.text('Detect again'));
+    await tester.tap(find.byTooltip('Detect again'));
     for (int i = 0; i < 10 && pedal.opens < before + 2; i++) {
       await settle();
     }
@@ -282,7 +282,7 @@ void main() {
       await start(tester);
       await editP03(tester);
       pedal.present = false;
-      await tester.tap(find.text('Detect again'));
+      await tester.tap(find.byTooltip('Detect again'));
       for (
         int i = 0;
         i < 60 && find.text('No pedal connected').evaluate().isEmpty;
@@ -292,10 +292,36 @@ void main() {
       }
       expect(find.text('No pedal connected'), findsOneWidget);
       pedal.present = true;
-      await tester.tap(find.text('Detect pedal'));
+      await tester.tap(find.byTooltip('Detect pedal'));
       for (
         int i = 0;
         i < 20 && find.text('Live on pedal').evaluate().isEmpty;
+        i++
+      ) {
+        await settle(tester);
+      }
+      expect(find.text('Write 1 preset to pedal'), findsOneWidget);
+      expect(find.text('Live on pedal'), findsOneWidget);
+    });
+
+    testWidgets('unplugging and plugging the pedal back needs no click', (
+      WidgetTester tester,
+    ) async {
+      await start(tester);
+      await editP03(tester);
+      pedal.present = false;
+      for (
+        int i = 0;
+        i < 60 && find.text('No pedal connected').evaluate().isEmpty;
+        i++
+      ) {
+        await settle(tester);
+      }
+      expect(find.text('No pedal connected'), findsOneWidget);
+      pedal.present = true;
+      for (
+        int i = 0;
+        i < 60 && find.text('Live on pedal').evaluate().isEmpty;
         i++
       ) {
         await settle(tester);
