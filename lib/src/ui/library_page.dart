@@ -17,7 +17,6 @@ class LibraryPage extends StatelessWidget {
     required this.links,
     required this.names,
     required this.canUsePedal,
-    required this.needsUsb,
     required this.busy,
     required this.task,
     required this.fraction,
@@ -45,7 +44,6 @@ class LibraryPage extends StatelessWidget {
   final bool canUsePedal;
 
   /// Connected over Bluetooth: names can be read, files go over USB only.
-  final bool needsUsb;
   final bool busy;
   final String? task;
   final double? fraction;
@@ -58,7 +56,7 @@ class LibraryPage extends StatelessWidget {
   final ValueChanged<LibraryItem> onSendItem;
   final ValueChanged<int> onLoadSlot;
 
-  bool get _canSend => canUsePedal && !needsUsb && !busy;
+  bool get _canSend => canUsePedal && !busy;
 
   @override
   Widget build(BuildContext context) {
@@ -112,15 +110,6 @@ class LibraryPage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 16),
-        if (needsUsb)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Text(
-              'The pedal is connected over Bluetooth. Connect the USB cable '
-              'to send files to it.',
-              style: TextStyle(color: theme.colorScheme.tertiary),
-            ),
-          ),
         if (task != null) ...<Widget>[
           Text(task!),
           const SizedBox(height: 6),

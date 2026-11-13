@@ -660,42 +660,64 @@ class _BackupBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme c = theme.colorScheme;
+    final Widget text = Text(
+      'Viewing a backup from '
+      '${draft.created.toLocal().toString().substring(0, 16)}, not '
+      'the pedal. Nothing changes on the pedal until you restore it.',
+      style: TextStyle(color: c.onTertiaryContainer),
+    );
+    final List<Widget> buttons = <Widget>[
+      TextButton(
+        style: TextButton.styleFrom(foregroundColor: c.onTertiaryContainer),
+        // With nothing read yet there is no pedal copy to go back to.
+        onPressed: page.busy
+            ? null
+            : page.workspace.onPedal != null
+            ? page.workspace.discard
+            : page.canUsePedal
+            ? page.onRead
+            : null,
+        child: const Text('Back to the pedal'),
+      ),
+      const SizedBox(width: 8),
+      FilledButton.icon(
+        onPressed: !page.busy && page.canUsePedal ? page.onWrite : null,
+        icon: const Icon(Icons.upload),
+        label: const Text('Restore to pedal…'),
+      ),
+    ];
+    final Widget icon = Icon(Icons.history, color: c.onTertiaryContainer);
     return Container(
       color: c.tertiaryContainer,
       padding: const EdgeInsets.fromLTRB(24, 8, 16, 8),
-      child: Row(
-        children: <Widget>[
-          Icon(Icons.history, color: c.onTertiaryContainer),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Viewing a backup from '
-              '${draft.created.toLocal().toString().substring(0, 16)}, not '
-              'the pedal. Nothing changes on the pedal until you restore it.',
-              style: TextStyle(color: c.onTertiaryContainer),
+      // On a phone the buttons go under the text, which needs the width.
+      child: MediaQuery.sizeOf(context).width < 600
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    icon,
+                    const SizedBox(width: 12),
+                    Expanded(child: text),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: buttons,
+                ),
+              ],
+            )
+          : Row(
+              children: <Widget>[
+                icon,
+                const SizedBox(width: 12),
+                Expanded(child: text),
+                const SizedBox(width: 12),
+                ...buttons,
+              ],
             ),
-          ),
-          const SizedBox(width: 12),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: c.onTertiaryContainer),
-            // With nothing read yet there is no pedal copy to go back to.
-            onPressed: page.busy
-                ? null
-                : page.workspace.onPedal != null
-                ? page.workspace.discard
-                : page.canUsePedal
-                ? page.onRead
-                : null,
-            child: const Text('Back to the pedal'),
-          ),
-          const SizedBox(width: 8),
-          FilledButton.icon(
-            onPressed: !page.busy && page.canUsePedal ? page.onWrite : null,
-            icon: const Icon(Icons.upload),
-            label: const Text('Restore to pedal…'),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1362,18 +1384,20 @@ class _ChainRow extends StatelessWidget {
         hotkey: eqHead ? 1 : order.length + 1,
       ),
     );
+    // EQ scrolls with the blocks, so on a phone nothing sits over them.
+    // Older clone firmware has no EQ.
+    final bool hasEq = !draft.oldLayout;
     return SizedBox(
       height: 64,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: <Widget>[
-          // Older clone firmware has no EQ.
-          if (eqHead && !draft.oldLayout) eq,
-          Flexible(
-            child: _blocks(theme, order, width, eqHead && !draft.oldLayout),
-          ),
-          if (!eqHead && !draft.oldLayout) eq,
-        ],
+      child: Center(
+        child: _blocks(
+          theme,
+          order,
+          width,
+          eqHead && hasEq,
+          header: eqHead && hasEq ? eq : null,
+          footer: !eqHead && hasEq ? eq : null,
+        ),
       ),
     );
   }
@@ -1382,8 +1406,16 @@ class _ChainRow extends StatelessWidget {
     ThemeData theme,
     List<int> order,
     double width,
-    bool eqFirst,
-  ) => ReorderableListView(
+    bool eqFirst, {
+    Widget? header,
+    Widget? footer,
+  }) => ReorderableListView(
+    header: header,
+    footer: footer,
+    // The default lift is a square Material with a shadow, drawn as a dark
+    // box behind the rounded chip.
+    proxyDecorator: (Widget child, int index, Animation<double> animation) =>
+        Material(type: MaterialType.transparency, child: child),
     shrinkWrap: true,
     scrollDirection: Axis.horizontal,
     // The default desktop handle is an icon drawn over the chip's text;

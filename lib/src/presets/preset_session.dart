@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import '../midi/midi_backend.dart';
 import 'mefcs.dart';
+import 'raw_flash.dart';
 import 'write_guard.dart';
 
 class PresetIoException implements Exception {
@@ -72,6 +73,10 @@ class PresetSession {
   }
 
   /// Sends [packet] and returns the first reply accepted by [want].
+  /// The last reply that was not the one waited for, shown when a write is
+  /// not confirmed.
+  Uint8List? _other;
+
   Future<Uint8List?> _exchange(
     Uint8List packet,
     bool Function(Uint8List reply) want, {
@@ -79,12 +84,16 @@ class PresetSession {
   }) async {
     checkOutgoing(packet);
     _queue.clear();
+    _other = null;
     await _conn.send(mefcsWrap(packet));
     final Stopwatch clock = Stopwatch()..start();
     while (clock.elapsed < wait) {
       final Uint8List? r = await _next(wait - clock.elapsed);
       if (r != null && want(r)) {
         return r;
+      }
+      if (r != null) {
+        _other = r;
       }
     }
     return null;
@@ -105,6 +114,22 @@ class PresetSession {
       }
     }
     throw PresetIoException('No answer reading $length bytes at $address.');
+  }
+
+  /// Reads [length] (at most 1024) bytes of raw flash at user-area [offset]
+  /// (see raw_flash.dart).
+  Future<Uint8List> readFlashRaw(int offset, int length) async {
+    final Uint8List request = rawReadPacket(offset, length);
+    for (int i = 0; i < attempts; i++) {
+      final Uint8List? r = await _exchange(
+        request,
+        (Uint8List p) => _answers(p, request, length),
+      );
+      if (r != null) {
+        return Uint8List.sublistView(r, 14, r.length - 1);
+      }
+    }
+    throw PresetIoException('No answer reading flash at $offset.');
   }
 
   /// The live RAM of the active preset, 92 bytes in the preset layout.
@@ -167,7 +192,11 @@ class PresetSession {
         return;
       }
     }
-    throw PresetIoException('The pedal did not confirm: $what.');
+    final Uint8List? got = _other;
+    throw PresetIoException(
+      'The pedal did not confirm: $what.'
+      '${got == null ? '' : ' It answered ${_hex(got.take(24))}${got.length > 24 ? '…' : ''}.'}',
+    );
   }
 
   Future<void> close() async {
@@ -194,3 +223,6 @@ bool _answers(Uint8List reply, Uint8List request, int length) {
   }
   return true;
 }
+
+String _hex(Iterable<int> bytes) =>
+    bytes.map((int b) => b.toRadixString(16).padLeft(2, '0')).join(' ');

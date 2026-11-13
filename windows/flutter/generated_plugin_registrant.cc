@@ -9,6 +9,7 @@
 #include <file_selector_windows/file_selector_windows.h>
 #include <flutter_midi_command_windows/flutter_midi_command_windows_plugin.h>
 #include <sentry_flutter/sentry_flutter_plugin.h>
+#include <universal_ble/universal_ble_plugin_c_api.h>
 
 void RegisterPlugins(flutter::PluginRegistry* registry) {
   FileSelectorWindowsRegisterWithRegistrar(
@@ -17,4 +18,6 @@ void RegisterPlugins(flutter::PluginRegistry* registry) {
       registry->GetRegistrarForPlugin("FlutterMidiCommandWindowsPlugin"));
   SentryFlutterPluginRegisterWithRegistrar(
       registry->GetRegistrarForPlugin("SentryFlutterPlugin"));
+  UniversalBlePluginCApiRegisterWithRegistrar(
+      registry->GetRegistrarForPlugin("UniversalBlePluginCApi"));
 }

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'alsa_backend.dart';
+import 'ble/android_gatt.dart';
 import 'ble/ble_backend.dart';
 import 'coremidi_backend.dart';
 import 'winmm_backend.dart';
@@ -24,7 +25,7 @@ class MidiPortRef {
   /// `vendor:product` in lowercase hex, when the backend can tell.
   final String? usbId;
 
-  /// Reached over Bluetooth LE: presets only, never firmware.
+  /// Reached over Bluetooth LE: presets and uploads, never firmware.
   final bool bluetooth;
 
   @override
@@ -71,9 +72,14 @@ abstract class MidiBackend {
     if (Platform.isWindows) {
       return WinMmBackend();
     }
-    if (Platform.isMacOS || Platform.isAndroid) {
-      // On Android, USB-MIDI comes through android.media.midi in the same
-      // plugin. Bluetooth there is not wired: BleBackend speaks BlueZ only.
+    if (Platform.isAndroid) {
+      // USB-MIDI through android.media.midi, in the same plugin as macOS.
+      return CombinedBackend(
+        CoreMidiBackend(),
+        BleBackend(client: AndroidGattClient()),
+      );
+    }
+    if (Platform.isMacOS) {
       return CoreMidiBackend();
     }
     throw UnsupportedError('Unsupported platform');
