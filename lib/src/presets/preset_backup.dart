@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'block_models.dart';
 import 'mefcs.dart';
+import 'raw_flash.dart';
 import 'preset_session.dart';
 import 'write_guard.dart';
 
@@ -641,6 +642,7 @@ Future<PresetDiff> restorePresetBank(
   PresetBackup backup, {
   void Function(String step, double fraction)? onProgress,
   PresetBackup? expected,
+  bool rawFlash = false,
 }) async {
   if (backup.oldLayout) {
     throw const PresetIoException(
@@ -725,14 +727,19 @@ Future<PresetDiff> restorePresetBank(
       'Nothing was stored yet: turning the pedal off brings back its old '
       'presets. Restore again to store them.';
   int done = 0;
-  try {
-    for (final (Uint8List packet, String what) in writes) {
-      await session.write(packet, what);
-      onProgress?.call('Writing presets', ++done / writes.length);
+  if (rawFlash) {
+    // Over Bluetooth the pedal refuses Save Preset: write the flash itself.
+    await writeAreaRaw(session, before, backup, diff, onProgress: onProgress);
+  } else {
+    try {
+      for (final (Uint8List packet, String what) in writes) {
+        await session.write(packet, what);
+        onProgress?.call('Writing presets', ++done / writes.length);
+      }
+    } on PresetIoException catch (e) {
+      // Even the first save may have been taken without its answer arriving.
+      throw PresetIoException('${e.message} $notStored');
     }
-  } on PresetIoException catch (e) {
-    // Even the first save may have been taken without its answer arriving.
-    throw PresetIoException('${e.message} $notStored');
   }
   if (writes.isNotEmpty) {
     // Saves go to a RAM mirror of the bank, which is also what reads
@@ -750,6 +757,9 @@ Future<PresetDiff> restorePresetBank(
     if (!left.isEmpty) {
       throw PresetIoException('Restore did not take for $left. $notStored');
     }
+  }
+  if (rawFlash) {
+    return diff; // Already in flash: there is nothing to store.
   }
   // Store even when nothing differed: an earlier restore whose store was
   // lost leaves the mirror right and the flash old. Sent once: sending it

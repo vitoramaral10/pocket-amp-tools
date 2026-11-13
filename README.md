@@ -131,7 +131,7 @@ Every preset lists all six blocks; the example shows one. Knobs go from 0 to 100
 
 ### Bluetooth (Linux)
 
-On Linux the app also finds the pedal over Bluetooth, through M-VAVE's own GATT service and BlueZ. Over Bluetooth you can read, edit (live too) and write presets; firmware updates and IR uploads need the USB cable, and the firmware version is not shown. This was checked on a pedal for reads and live edits; writing presets over Bluetooth is read back and checked like over USB.
+On Linux the app also finds the pedal over Bluetooth, through M-VAVE's own GATT service and BlueZ. Over Bluetooth you can read, edit (live too) and write presets; IR and model uploads go over the radio too (not yet tried on a pedal); firmware updates need the USB cable, and the firmware version is not shown. This was checked on a pedal for reads and live edits. With Bluetooth connected the pedal refuses its own preset save (no memory left for its 8 KB copy), so over Bluetooth the app writes the preset flash itself: it reads the 4 KB sector, erases it, writes it back and reads it again; the sound mutes for about a second. Checked on a pedal from Android. Keep the pedal on while it writes: a link lost between erase and write leaves those presets blank until the next restore.
 
 The app never starts pairing, and only uses a pedal paired with this computer (a neighbour's pedal nearby is ignored). Pair it once in a terminal, then click **Detect again**:
 
@@ -159,7 +159,7 @@ Before anything is written, the app:
 - only asks the pedal for its identity when it opens; presets are read only when you start an update or save a backup, and nothing is written until you confirm.
 - checks every packet to the pedal against the exact shapes measured on a Pocket AMP before it is sent (reads of the preset area, live edits of the active preset, saving presets and EQ, the IR upload) and refuses anything else, so a bug cannot write somewhere new;
 - closes the live editing connection before any other operation, and never edits live during a firmware update;
-- sends nothing but preset traffic over Bluetooth: firmware updates and IR uploads are refused there.
+- never sends the firmware update protocol over Bluetooth.
 
 ## Status
 
@@ -168,6 +168,7 @@ Before anything is written, the app:
 | Linux | tested with a real pedal; preset backup and restore too | the app's traffic was traced side by side with the Python prototype that updated a real pedal from V1.03 to V1.05: same requests, same answers. A full update by the app itself waits for the next firmware, because the pedal refuses to reinstall the version it already runs |
 | Windows | works: a user's pedal was detected and its presets read ([#2](../../issues/2)) | works: a Coolmusic PIXIE1 was updated from V0.07 to Pocket AMP V1.05 ([#2](../../issues/2)), and a Donner Pocket AMP from V08 ([discussion #1](../../discussions/1)); in both, the first attempt stopped in update mode and the second finished |
 | macOS | works: a New Bee SK17 was detected ([#6](../../pull/6)) | works: the same SK17 was updated to Pocket AMP V1.05, with a fork that differs only in which pedals it accepts ([#6](../../pull/6)) |
+| Android | not tried on a pedal yet ([#33](../../issues/33)) | not tried; use a USB OTG cable and keep the phone charged |
 
 Reports are very welcome, including "it worked": use the [hardware test report](../../issues/new?template=hardware_report.yml) form.
 
@@ -197,7 +198,9 @@ The Pocket AMP runs on a JieLi AC791N, the same chip as the M-VAVE FM-1, and use
 - the raw message `F0 22 24 35 7F F7` arms a transfer, after which the pedal requests blocks with command `0x30` (`[seq, address u32, size u24]`) and the app answers with the bytes of the package;
 - a request for address `0xE0000000` ends the loader phase and `0xF0000000` ends the flash phase; both are answered with `success\0`, and the pedal restarts.
 
-The USB-MIDI transport is native on each system: ALSA rawmidi on Linux, WinMM on Windows (each SysEx send waits for the driver to finish with the buffer) and CoreMIDI on macOS (through [flutter_midi_command](https://pub.dev/packages/flutter_midi_command)).
+The USB-MIDI transport is native on each system: ALSA rawmidi on Linux, WinMM on Windows (each SysEx send waits for the driver to finish with the buffer) CoreMIDI on macOS and android.media.midi on Android (both through [flutter_midi_command](https://pub.dev/packages/flutter_midi_command); Android takes at most 1016 bytes per send, so longer SysEx goes in pieces).
+
+On Android the pedal is reached over USB (OTG cable) or Bluetooth: pair the pedal once with *Pair over Bluetooth* in the app's menu (or `Pocket AMP_BLE` in the system settings). *Save as* keeps the file in the app's backup folder, since Android has no save dialog for it.
 
 ## Error reports
 
@@ -210,7 +213,7 @@ Requires Flutter 3.47 or newer.
 ```bash
 flutter pub get
 flutter test
-flutter build linux     # or windows / macos, on that system
+flutter build linux     # or windows / macos, on that system; flutter build apk for Android
 ```
 
 `flutter test test_hardware/` talks to a real pedal on Linux (identity query only). Set `POCKET_AMP_FWSC=/path/to/Pocket\ AMP.fwsc` to also run the tests against the official package.

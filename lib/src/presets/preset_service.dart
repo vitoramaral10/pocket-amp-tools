@@ -53,6 +53,7 @@ class PresetService {
         backup,
         onProgress: onProgress,
         expected: expected,
+        rawFlash: pedal.port.bluetooth,
       );
     } finally {
       await s.close();
@@ -84,7 +85,13 @@ class PresetService {
       );
       final PresetBackup b = now.withOldPresets(area);
       return (
-        await restorePresetBank(s, b, onProgress: onProgress, expected: now),
+        await restorePresetBank(
+          s,
+          b,
+          onProgress: onProgress,
+          expected: now,
+          rawFlash: pedal.port.bluetooth,
+        ),
         b,
       );
     } on FormatException catch (e) {
@@ -160,9 +167,6 @@ class PresetService {
     void Function(double fraction)? onProgress,
   }) async {
     _checkPedal(pedal);
-    if (pedal.port.bluetooth) {
-      throw PresetIoException('Uploading an $what needs the USB cable.');
-    }
     final PresetSession s = PresetSession(await _open(pedal));
     try {
       for (final (int i, (Uint8List packet, String step)) in packets.indexed) {

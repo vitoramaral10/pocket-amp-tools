@@ -30,6 +30,7 @@ import '../telemetry.dart';
 import 'assistant_panel.dart';
 import 'assistant_tools.dart';
 import 'backups_page.dart';
+import 'ble_pair_dialog.dart';
 import 'library_page.dart';
 import 'onboarding.dart';
 import 'presets_page.dart';
@@ -162,7 +163,7 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
       return null;
     }
     return '${p.rebrand}, firmware ${p.version}, '
-        '${p.port.bluetooth ? 'Bluetooth (presets only, no file uploads)' : 'USB'}'
+        '${p.port.bluetooth ? 'Bluetooth (no firmware updates)' : 'USB'}'
         '${p.inLoader ? ', in update mode' : ''}';
   }
 
@@ -405,6 +406,12 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
     }
   }
 
+  Future<void> _pairBluetooth() async {
+    if (await showBlePairDialog(context)) {
+      await _detect();
+    }
+  }
+
   Future<void> _detect() async {
     if (_busy) {
       return;
@@ -432,6 +439,9 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
         _pedal = p;
         if (p != null && p.inLoader) {
           _section = 2;
+        }
+        if (!_shown.contains(_section)) {
+          _section = 0;
         }
       });
     } catch (e) {
@@ -803,6 +813,12 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
 
   Future<void> _savePresetFile() => _runPresetTask('Saving a file', () async {
     final PresetBackup b = _workspace.draft!;
+    if (Platform.isAndroid) {
+      // file_selector has no save dialog on Android: keep it with the backups.
+      final File f = await PresetService.keepCopy(b);
+      _workspace.saved();
+      return 'Saved to ${f.path}.';
+    }
     final FileSaveLocation? where = await getSaveLocation(
       suggestedName: b.suggestedFileName,
       acceptedTypeGroups: const <XTypeGroup>[
@@ -1235,6 +1251,17 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
         (Icons.inventory_2_outlined, Icons.inventory_2, 'Backups'),
       ];
 
+  /// Firmware updates go only over USB, and on a phone the pedal is mostly
+  /// on Bluetooth: there the section shows only with a pedal on the cable.
+  bool get _showFirmware =>
+      !Platform.isAndroid || (_pedal != null && !_pedal!.port.bluetooth);
+
+  /// The sections on screen, as indexes into [_sections].
+  List<int> get _shown => <int>[
+    for (int i = 0; i < _sections.length; i++)
+      if (i != 2 || _showFirmware) i,
+  ];
+
   void _go(int i) {
     // The update screen stays up until the pedal is written.
     if (_stage != _Stage.updating) {
@@ -1274,7 +1301,6 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
         links: _libLinks,
         names: _namesOf(_libKind),
         canUsePedal: _pedal != null && !_pedal!.inLoader,
-        needsUsb: _pedal?.port.bluetooth ?? false,
         busy: _busy,
         task: _presetTask,
         fraction: _presetFraction,
@@ -1347,12 +1373,12 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 NavigationRail(
-                  selectedIndex: _section,
-                  onDestinationSelected: _go,
+                  selectedIndex: _shown.indexOf(_section),
+                  onDestinationSelected: (int i) => _go(_shown[i]),
                   labelType: NavigationRailLabelType.all,
                   destinations: <NavigationRailDestination>[
                     for (final (IconData off, IconData on, String label)
-                        in _sections)
+                        in _shown.map((int i) => _sections[i]))
                       NavigationRailDestination(
                         icon: Icon(off),
                         selectedIcon: Icon(on),
@@ -1368,11 +1394,11 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
       bottomNavigationBar: wide
           ? null
           : NavigationBar(
-              selectedIndex: _section,
-              onDestinationSelected: _go,
+              selectedIndex: _shown.indexOf(_section),
+              onDestinationSelected: (int i) => _go(_shown[i]),
               destinations: <NavigationDestination>[
                 for (final (IconData off, IconData on, String label)
-                    in _sections)
+                    in _shown.map((int i) => _sections[i]))
                   NavigationDestination(
                     icon: Icon(off),
                     selectedIcon: Icon(on),
@@ -1396,7 +1422,7 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
     final String subtitle = p == null
         ? 'Connect it by USB (or pair it by Bluetooth) and close other MIDI apps'
         : p.port.bluetooth
-        ? 'Bluetooth · presets only'
+        ? 'Bluetooth · no firmware updates'
         : p.presetsOnly
         ? 'Firmware ${p.version} · presets only'
         : p.inLoader
@@ -1464,6 +1490,12 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
             onPressed: _busy ? null : _detect,
             icon: const Icon(Icons.refresh),
           ),
+          if (Platform.isAndroid)
+            IconButton(
+              tooltip: 'Pair over Bluetooth',
+              onPressed: _busy ? null : _pairBluetooth,
+              icon: const Icon(Icons.bluetooth_searching),
+            ),
           const SizedBox(width: 4),
         ],
         if (Telemetry.available)
@@ -1488,6 +1520,12 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
                     onPressed: _busy ? null : _detect,
                     child: Text(detectLabel),
                   ),
+                  if (Platform.isAndroid)
+                    MenuItemButton(
+                      leadingIcon: const Icon(Icons.bluetooth_searching),
+                      onPressed: _busy ? null : _pairBluetooth,
+                      child: const Text('Pair over Bluetooth'),
+                    ),
                 ]
               : const <Widget>[],
           onAbout: () => showAboutDialog(

@@ -1,0 +1,4 @@
+First Android release.
+* Connects to the Pocket AMP over Bluetooth (pair from the app) or USB-C.
+* Edit presets live, back up and restore them, upload IRs and models.
+* Firmware updates need the USB cable; Bluetooth cannot carry them.

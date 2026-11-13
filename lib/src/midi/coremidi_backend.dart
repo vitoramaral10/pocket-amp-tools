@@ -5,6 +5,7 @@
 // SysEx before handing it to Dart.
 
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_midi_command/flutter_midi_command.dart';
@@ -46,6 +47,21 @@ class CoreMidiBackend implements MidiBackend {
       throw MidiIoException('Could not open ${port.name}: $e');
     }
     return _CoreMidiConnection(_midi, device);
+  }
+}
+
+/// MidiPortImpl.MAX_PACKET_DATA_SIZE in android.media.midi.
+const int androidMaxSend = 1016;
+
+/// [sysex] cut into pieces Android accepts, in order, without copying.
+Iterable<Uint8List> androidSendSlices(Uint8List sysex) sync* {
+  for (int at = 0; at < sysex.length; at += androidMaxSend) {
+    final int end = at + androidMaxSend;
+    yield Uint8List.sublistView(
+      sysex,
+      at,
+      end < sysex.length ? end : sysex.length,
+    );
   }
 }
 
@@ -93,7 +109,15 @@ class _CoreMidiConnection implements MidiConnection {
     if (_closed || _gone) {
       throw const MidiPortGone();
     }
-    _midi.sendData(sysex, deviceId: _device.id);
+    if (!Platform.isAndroid) {
+      _midi.sendData(sysex, deviceId: _device.id);
+      return;
+    }
+    // MidiInputPort.send refuses more than 1016 bytes at once; the IR
+    // chunks are larger. The USB-MIDI driver carries a SysEx across sends.
+    for (final Uint8List part in androidSendSlices(sysex)) {
+      _midi.sendData(part, deviceId: _device.id);
+    }
   }
 
   @override
