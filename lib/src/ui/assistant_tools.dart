@@ -740,8 +740,11 @@ List<String> _diff(Map<String, Object> a, Map<String, Object> b) {
     final Object? bb = eb['bands'];
     if (ba is List && bb is List && ba.length == bb.length) {
       for (int i = 0; i < bb.length; i++) {
-        if (ba[i] != bb[i]) {
-          out.add('EQ band ${i + 1} ${ba[i]} → ${bb[i]}');
+        // A band is a number or a labelled value.
+        final Object? va = ba[i] is Map ? (ba[i] as Map)['value'] : ba[i];
+        final Object? vb = bb[i] is Map ? (bb[i] as Map)['value'] : bb[i];
+        if (va != vb) {
+          out.add('EQ band ${i + 1} $va → $vb');
         }
       }
     }

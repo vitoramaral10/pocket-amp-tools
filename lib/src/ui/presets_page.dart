@@ -1387,8 +1387,12 @@ class _EqCard extends StatelessWidget {
               ),
               for (int band = 0; band < 5; band++)
                 _LabeledSlider(
-                  label: 'Band ${band + 1}',
+                  label: eqBandLabels[band],
                   value: draft.eqBand(id, band),
+                  // Each band step is half a decibel.
+                  format: (int v) =>
+                      '${v > 0 ? '+' : ''}${(v * 0.5).toStringAsFixed(1)} dB',
+                  valueWidth: 60,
                   min: -6,
                   max: 6,
                   dense: true,
@@ -1413,6 +1417,8 @@ class _LabeledSlider extends StatelessWidget {
     this.min = 0,
     this.dense = false,
     this.labelAbove = false,
+    this.format,
+    this.valueWidth = 36,
   });
   final String label;
   final int value;
@@ -1424,9 +1430,16 @@ class _LabeledSlider extends StatelessWidget {
   final bool labelAbove;
   final ValueChanged<int>? onChanged;
 
+  /// How the value is written out; the bare number when null.
+  final String Function(int value)? format;
+
+  /// Width kept for the value beside the slider.
+  final double valueWidth;
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final String shown = format?.call(value) ?? '$value';
     // A stored value outside the range is shown as it is; moving the slider
     // brings it back into range.
     final int top = value > max ? value : max;
@@ -1436,7 +1449,7 @@ class _LabeledSlider extends StatelessWidget {
         labelAbove || (dense && MediaQuery.sizeOf(context).width < 600);
     final Widget text = Text(label, style: theme.textTheme.bodyMedium);
     final Widget number = Text(
-      '$value',
+      shown,
       textAlign: TextAlign.end,
       style: theme.textTheme.bodyMedium?.copyWith(
         fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
@@ -1448,7 +1461,7 @@ class _LabeledSlider extends StatelessWidget {
       max: top.toDouble(),
       // Ticks only where there are few steps (the EQ bands).
       divisions: top - bottom <= 20 ? top - bottom : null,
-      label: '$value',
+      label: shown,
       onChanged: onChanged == null ? null : (double v) => onChanged!(v.round()),
     );
     if (above) {
@@ -1474,7 +1487,7 @@ class _LabeledSlider extends StatelessWidget {
       children: <Widget>[
         SizedBox(width: dense ? 84 : 120, child: text),
         Expanded(child: slider),
-        SizedBox(width: 36, child: number),
+        SizedBox(width: valueWidth, child: number),
       ],
     );
   }

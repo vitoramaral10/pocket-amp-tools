@@ -179,7 +179,13 @@ void main() {
     expect(p['eq'], <String, Object>{
       'on': true,
       'position': 'head',
-      'bands': <int>[6, -6, 0, 0, 3],
+      'bands': <Map<String, Object>>[
+        <String, Object>{'label': '100Hz', 'value': 6},
+        <String, Object>{'label': '250Hz', 'value': -6},
+        <String, Object>{'label': '800Hz', 'value': 0},
+        <String, Object>{'label': '2kHz', 'value': 0},
+        <String, Object>{'label': '10kHz', 'value': 3},
+      ],
     });
 
     // Editing a field changes what is restored. The label is not read: the

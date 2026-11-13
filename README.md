@@ -111,11 +111,21 @@ A backup file lists every preset as plain fields, and the app restores from thos
       ]
     }
   },
-  "eq": { "on": true, "position": "tail", "bands": [2, 0, -1, 0, 3] }
+  "eq": {
+    "on": true,
+    "position": "tail",
+    "bands": [
+      { "label": "100Hz", "value": 2 },
+      { "label": "250Hz", "value": 0 },
+      { "label": "800Hz", "value": -1 },
+      { "label": "2kHz", "value": 0 },
+      { "label": "10kHz", "value": 3 }
+    ]
+  }
 }
 ```
 
-Every preset lists all six blocks; the example shows one. Knobs go from 0 to 100 and EQ bands from -6 to 6. Each block lists its six stored knob values in order: the position decides which knob a value sets, and the `label` is only there to read, so it is not read back and a renamed label does not change what is restored. A label marked `(unused)` is a stored value the model does not use; it is kept so nothing is lost. A file the pedal cannot take is refused before anything is written, naming the preset and field. Model and knob names follow firmware V1.05 (list collected in [#11](../../issues/11)); the block order and model numbers are not yet confirmed on a pedal for every position. Backups saved by earlier versions (`presets@1`, and `presets@2` with knobs by name) still restore. A file records which model list named it (`"models"`); a file named with another list is refused rather than restored as different bytes.
+Every preset lists all six blocks; the example shows one. Knobs go from 0 to 100 and EQ bands from -6 to +6, each step being 0.5 dB; the five bands are listed in order with their frequency as `label`, read back by position like the knobs (a plain list of five numbers is taken too). Each block lists its six stored knob values in order: the position decides which knob a value sets, and the `label` is only there to read, so it is not read back and a renamed label does not change what is restored. A label marked `(unused)` is a stored value the model does not use; it is kept so nothing is lost. A file the pedal cannot take is refused before anything is written, naming the preset and field. Model and knob names follow firmware V1.05 (list collected in [#11](../../issues/11)); the block order and model numbers are not yet confirmed on a pedal for every position. Backups saved by earlier versions (`presets@1`, and `presets@2` with knobs by name) still restore. A file records which model list named it (`"models"`); a file named with another list is refused rather than restored as different bytes.
 
 ### Bluetooth (Linux)
 

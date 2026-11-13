@@ -259,7 +259,10 @@ class PresetBackup {
               'V1.05. Each block lists its six stored knob values in order; '
               'the "label" only says what the knob is and is not read back, so '
               'the position decides which knob a value goes to. Labels marked '
-              'unused are values the model does not use. Block names follow '
+              'unused are values the model does not use. Knob values range '
+              'from 0 to 100. The EQ lists its five bands in order, labelled '
+              'by frequency the same way; band values range from -6 to +6, '
+              'each step being 0.5 dB. Block names follow '
               'the order on the screen and are not confirmed for every '
               'position.',
           'models': modelListId,
@@ -328,12 +331,28 @@ const Map<String, String> _formerKnobNames = <String, String>{
   'T-Mode (Grit)': 'Grit',
 };
 
+/// Centre frequencies of the five EQ bands, in band order. What the backup
+/// file shows next to each band value; values are read back by position.
+const List<String> eqBandLabels = <String>[
+  '100Hz',
+  '250Hz',
+  '800Hz',
+  '2kHz',
+  '10kHz',
+];
+
 /// An EQ record: on/off, position in the chain (0 tail, 1 head) and five
-/// bands in the steps the pedal stores.
+/// bands in the steps the pedal stores (0.5 dB each).
 Map<String, Object> _readableEq(Uint8List r) => <String, Object>{
   'on': _flag(r[0]),
   'position': r[1] < 2 ? const <String>['tail', 'head'][r[1]] : r[1],
-  'bands': <int>[for (final int b in r.sublist(2)) b.toSigned(8)],
+  'bands': <Map<String, Object>>[
+    for (final (int i, int b) in r.sublist(2).indexed)
+      <String, Object>{
+        'label': i < eqBandLabels.length ? eqBandLabels[i] : 'band${i + 1}',
+        'value': b.toSigned(8),
+      },
+  ],
 };
 
 /// Turns the plain fields of one preset back into bytes, naming the preset
@@ -464,8 +483,20 @@ class _Reader {
         'tail',
         'head',
       ], beyond: !strict),
+      // A band is a number, or a labelled value as the file writes it; the
+      // label is not read.
       for (final Object? b in bands)
-        number(b, 'eq.bands', strict ? -6 : -128, strict ? 6 : 127) & 0xFF,
+        number(
+              b is Map<String, Object?>
+                  ? (b.containsKey('value')
+                        ? b['value']
+                        : _bad('eq.bands', 'each band needs a "value"'))
+                  : b,
+              'eq.bands',
+              strict ? -6 : -128,
+              strict ? 6 : 127,
+            ) &
+            0xFF,
     ]);
   }
 }
