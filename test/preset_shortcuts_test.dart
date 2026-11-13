@@ -246,6 +246,65 @@ void main() {
     expect(d.model(0, amp), (model - 1) % n, reason: 'wraps around');
   });
 
+  testWidgets('Ctrl+F opens the filter and Esc clears it', (
+    WidgetTester tester,
+  ) async {
+    final PresetWorkspace w = await _open(tester);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Filter presets'), findsWidgets);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing, reason: 'Esc closes it');
+
+    w.details.minRating = 4;
+    expect(w.details.filtering, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    expect(w.details.filtering, isFalse);
+  });
+
+  testWidgets('Ctrl+Shift+C and Ctrl+Shift+V copy one preset onto another', (
+    WidgetTester tester,
+  ) async {
+    String? clip;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (MethodCall call) async {
+        if (call.method == 'Clipboard.setData') {
+          clip = (call.arguments as Map<Object?, Object?>)['text'] as String?;
+        } else if (call.method == 'Clipboard.getData') {
+          return <String, Object?>{'text': clip};
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    final PresetWorkspace w = await _open(tester);
+    Future<void> ctrlShift(LogicalKeyboardKey k) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(k);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await ctrlShift(LogicalKeyboardKey.keyC);
+    expect(clip, isNotNull);
+    w.select(5);
+    await ctrlShift(LogicalKeyboardKey.keyV);
+    Map<String, Object?> body(int id) =>
+        Map<String, Object?>.of(w.draft!.presetFields(id))..remove('preset');
+    expect(body(5), body(0));
+  });
+
   testWidgets('each chain chip shows the number key that opens it', (
     WidgetTester tester,
   ) async {

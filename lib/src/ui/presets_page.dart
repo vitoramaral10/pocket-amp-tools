@@ -312,7 +312,27 @@ class PresetsPage extends StatelessWidget {
       const CharacterActivator('['): () => nextModel(-1),
       const CharacterActivator(']'): () => nextModel(1),
       const CharacterActivator('?'): () => _showShortcuts(context),
+      _ctrl(LogicalKeyboardKey.keyF): () {
+        if (draft != null) {
+          showMetaFilter(context, workspace.details, draft.usableCount);
+        }
+      },
+      const SingleActivator(LogicalKeyboardKey.escape): () {
+        if (workspace.details.filtering) {
+          workspace.details.clearFilter();
+        }
+      },
       // Enabled as in the menu.
+      _ctrl(LogicalKeyboardKey.keyC, shift: true): () {
+        if (draft != null) {
+          _copyPreset(context, workspace);
+        }
+      },
+      _ctrl(LogicalKeyboardKey.keyV, shift: true): () {
+        if (!busy && draft != null && !draft.oldLayout) {
+          _pastePreset(context, workspace);
+        }
+      },
       _ctrl(LogicalKeyboardKey.keyO): () {
         if (!busy) {
           onOpen();
@@ -438,12 +458,16 @@ class PresetsMenu extends StatelessWidget {
             const Divider(),
             MenuItemButton(
               leadingIcon: const Icon(Icons.copy),
-              onPressed: loaded ? () => _copy(context) : null,
+              onPressed: loaded ? () => _copyPreset(context, workspace) : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyC, shift: true),
               child: const Text('Copy preset as JSON'),
             ),
             MenuItemButton(
               leadingIcon: const Icon(Icons.content_paste),
-              onPressed: idle && editable ? () => _paste(context) : null,
+              onPressed: idle && editable
+                  ? () => _pastePreset(context, workspace)
+                  : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyV, shift: true),
               child: const Text('Paste preset from JSON'),
             ),
             MenuItemButton(
@@ -471,50 +495,53 @@ class PresetsMenu extends StatelessWidget {
       );
     },
   );
+}
 
-  PresetBackup get draft => workspace.draft!;
-  int get id => workspace.selected;
+/// The open preset to the clipboard as JSON, as the menu and Ctrl+Shift+C do.
+Future<void> _copyPreset(
+  BuildContext context,
+  PresetWorkspace workspace,
+) async {
+  final int id = workspace.selected;
+  await Clipboard.setData(
+    ClipboardData(
+      text: const JsonEncoder.withIndent('  ')
+          .convert(workspace.draft!.presetFields(id)),
+    ),
+  );
+  if (context.mounted) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${slotName(id)} copied as JSON.')));
+  }
+}
 
-  void _edit(void Function() change) {
-    change();
+/// A preset in JSON from the clipboard into the open one.
+Future<void> _pastePreset(
+  BuildContext context,
+  PresetWorkspace workspace,
+) async {
+  final int id = workspace.selected;
+  String done;
+  try {
+    final String? text = (await Clipboard.getData('text/plain'))?.text;
+    final Object? j = jsonDecode(text ?? '');
+    if (j is! Map<String, Object?>) {
+      throw const FormatException('expected one preset as a JSON object');
+    }
+    workspace.draft!.setPresetFields(id, j);
     workspace.edited();
+    workspace.showOnPedal();
+    done =
+        'Pasted into ${slotName(id)}. Nothing is on the pedal until you '
+        'write it.';
+  } on FormatException catch (e) {
+    done = 'Could not paste: ${e.message}';
+  } on PlatformException catch (e) {
+    done = 'Could not read the clipboard: ${e.message ?? e.code}';
   }
-
-  Future<void> _copy(BuildContext context) async {
-    await Clipboard.setData(
-      ClipboardData(
-        text: const JsonEncoder.withIndent('  ')
-            .convert(draft.presetFields(id)),
-      ),
-    );
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${slotName(id)} copied as JSON.')),
-      );
-    }
-  }
-
-  Future<void> _paste(BuildContext context) async {
-    String done;
-    try {
-      final String? text = (await Clipboard.getData('text/plain'))?.text;
-      final Object? j = jsonDecode(text ?? '');
-      if (j is! Map<String, Object?>) {
-        throw const FormatException('expected one preset as a JSON object');
-      }
-      _edit(() => draft.setPresetFields(id, j));
-      workspace.showOnPedal();
-      done =
-          'Pasted into ${slotName(id)}. Nothing is on the pedal until you '
-          'write it.';
-    } on FormatException catch (e) {
-      done = 'Could not paste: ${e.message}';
-    } on PlatformException catch (e) {
-      done = 'Could not read the clipboard: ${e.message ?? e.code}';
-    }
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
-    }
+  if (context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(done)));
   }
 }
 
@@ -774,8 +801,8 @@ bool get _apple => <TargetPlatform>{
 }.contains(defaultTargetPlatform);
 
 /// Ctrl, or ⌘ on Apple systems.
-SingleActivator _ctrl(LogicalKeyboardKey key) =>
-    SingleActivator(key, control: !_apple, meta: _apple);
+SingleActivator _ctrl(LogicalKeyboardKey key, {bool shift = false}) =>
+    SingleActivator(key, control: !_apple, meta: _apple, shift: shift);
 
 String _ctrlLabel(String key) => _apple ? '⌘$key' : 'Ctrl+$key';
 
@@ -798,6 +825,10 @@ List<(String, String)> get _shortcuts => <(String, String)>[
   ('1 – 7', 'Open a block, counting from the left of the chain'),
   ('Space', 'Turn the open block on or off'),
   ('[ ]', 'Previous or next model of the open block'),
+  (_ctrlLabel('F'), 'Filter the presets'),
+  ('Esc', 'Clear the filter'),
+  (_ctrlLabel('Shift+C'), 'Copy the preset as JSON'),
+  (_ctrlLabel('Shift+V'), 'Paste a preset from JSON'),
   (_ctrlLabel('O'), 'Open a file'),
   (_ctrlLabel('S'), 'Save to a file'),
   (_ctrlLabel('R'), 'Read again from the pedal'),
@@ -811,6 +842,7 @@ Future<void> _showShortcuts(BuildContext context) {
     builder: (BuildContext context) => AlertDialog(
       icon: const Icon(Icons.keyboard_outlined),
       title: const Text('Keyboard shortcuts'),
+      scrollable: true,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
