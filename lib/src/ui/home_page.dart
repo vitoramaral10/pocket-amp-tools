@@ -1250,6 +1250,8 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
         message: _presetMessage,
         messageIsError: _presetError,
         onRead: _readPresets,
+        onOpen: _openPresetFile,
+        onSave: _savePresetFile,
         onWrite: _writeDraft,
       ),
       1 => LibraryPage(

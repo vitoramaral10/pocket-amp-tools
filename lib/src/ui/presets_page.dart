@@ -233,6 +233,8 @@ class PresetsPage extends StatelessWidget {
     required this.message,
     required this.messageIsError,
     required this.onRead,
+    required this.onOpen,
+    required this.onSave,
     required this.onWrite,
   });
 
@@ -244,7 +246,68 @@ class PresetsPage extends StatelessWidget {
   final String? message;
   final bool messageIsError;
   final VoidCallback onRead;
+  final VoidCallback onOpen;
+  final VoidCallback onSave;
   final VoidCallback onWrite;
+
+  /// Keys for the whole page, so files work before anything is loaded. A
+  /// focused slider or text field keeps its own arrows and Home/End.
+  Map<ShortcutActivator, VoidCallback> _keys(BuildContext context) {
+    final PresetBackup? draft = workspace.draft;
+    void move(int by) {
+      if (draft != null) {
+        _move(workspace, _shownSlots(workspace, draft), by);
+      }
+    }
+
+    return <ShortcutActivator, VoidCallback>{
+      const SingleActivator(LogicalKeyboardKey.arrowLeft): () => move(-1),
+      const SingleActivator(LogicalKeyboardKey.arrowUp): () => move(-1),
+      const SingleActivator(LogicalKeyboardKey.arrowRight): () => move(1),
+      const SingleActivator(LogicalKeyboardKey.arrowDown): () => move(1),
+      const SingleActivator(LogicalKeyboardKey.pageUp): () => move(-10),
+      const SingleActivator(LogicalKeyboardKey.pageDown): () => move(10),
+      const SingleActivator(LogicalKeyboardKey.home): () => move(-presetCount),
+      const SingleActivator(LogicalKeyboardKey.end): () => move(presetCount),
+      // Any slot, whatever the filter shows.
+      const SingleActivator(LogicalKeyboardKey.f2): () async {
+        if (draft == null) {
+          return;
+        }
+        final int? id = await _askSlot(context, draft.usableCount);
+        if (id != null) {
+          workspace.select(id);
+        }
+      },
+      // 1 opens the first chip of the chain row, 2 the next, and so on.
+      for (int n = 1; n <= 9; n++)
+        CharacterActivator('$n'): () {
+          final List<int> chips = draft == null
+              ? const <int>[]
+              : _chipOrder(draft, workspace.selected);
+          if (n <= chips.length) {
+            workspace.open(chips[n - 1]);
+          }
+        },
+      const CharacterActivator('?'): () => _showShortcuts(context),
+      // Enabled as in the menu.
+      _ctrl(LogicalKeyboardKey.keyO): () {
+        if (!busy) {
+          onOpen();
+        }
+      },
+      _ctrl(LogicalKeyboardKey.keyS): () {
+        if (!busy && draft != null && !draft.oldLayout) {
+          onSave();
+        }
+      },
+      _ctrl(LogicalKeyboardKey.keyR): () {
+        if (!busy && canUsePedal) {
+          onRead();
+        }
+      },
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -252,7 +315,7 @@ class PresetsPage extends StatelessWidget {
       listenable: Listenable.merge(<Listenable>[workspace, workspace.details]),
       builder: (BuildContext context, _) {
         final PresetBackup? draft = workspace.draft;
-        return Column(
+        final Widget page = Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             if (_Toolbar.wanted(this)) _Toolbar(page: this),
@@ -269,6 +332,10 @@ class PresetsPage extends StatelessWidget {
                   : _Editor(workspace: workspace, draft: draft, busy: busy),
             ),
           ],
+        );
+        return CallbackShortcuts(
+          bindings: _keys(context),
+          child: Focus(autofocus: true, child: page),
         );
       },
     );
@@ -331,16 +398,19 @@ class PresetsMenu extends StatelessWidget {
             MenuItemButton(
               leadingIcon: const Icon(Icons.folder_open),
               onPressed: idle ? onOpen : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyO),
               child: const Text('Open file…'),
             ),
             MenuItemButton(
               leadingIcon: const Icon(Icons.save_alt),
               onPressed: idle && editable ? onSave : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyS),
               child: const Text('Save file…'),
             ),
             MenuItemButton(
               leadingIcon: const Icon(Icons.download_for_offline_outlined),
               onPressed: idle && canUsePedal ? onRead : null,
+              shortcut: _ctrl(LogicalKeyboardKey.keyR),
               child: const Text('Read again from pedal'),
             ),
             const Divider(),
@@ -356,7 +426,8 @@ class PresetsMenu extends StatelessWidget {
             ),
             MenuItemButton(
               leadingIcon: const Icon(Icons.keyboard_outlined),
-              onPressed: loaded ? () => _showShortcuts(context) : null,
+              onPressed: () => _showShortcuts(context),
+              shortcut: const CharacterActivator('?'),
               child: const Text('Keyboard shortcuts'),
             ),
             const Divider(),
@@ -600,43 +671,7 @@ class _Editor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Set<int> changed = workspace.changed;
-    // The slots the filter lets through, in order.
-    final List<int> shown = <int>[
-      for (int id = 0; id < draft.usableCount; id++)
-        if (workspace.details.matches(id)) id,
-    ];
-    // A focused slider or text field keeps its own arrow keys.
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
-            _step(shown, -1),
-        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
-            _step(shown, 1),
-        const CharacterActivator('?'): () => _showShortcuts(context),
-        // Any slot, whatever the filter shows.
-        const SingleActivator(LogicalKeyboardKey.f2): () async {
-          final int? id = await _askSlot(context, draft.usableCount);
-          if (id != null) {
-            workspace.select(id);
-          }
-        },
-      },
-      child: Focus(autofocus: true, child: _layout(changed, shown)),
-    );
-  }
-
-  /// Selects the next ([by] 1) or previous (-1) slot the filter shows.
-  void _step(List<int> shown, int by) {
-    final int at = workspace.selected;
-    final Iterable<int> ahead = by > 0
-        ? shown.where((int id) => id > at)
-        : shown.reversed.where((int id) => id < at);
-    if (ahead.isNotEmpty) {
-      workspace.select(ahead.first);
-    }
-  }
-
-  Widget _layout(Set<int> changed, List<int> shown) {
+    final List<int> shown = _shownSlots(workspace, draft);
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints box) {
         final _Detail detail = _Detail(
@@ -679,6 +714,49 @@ List<String> _onBlocks(PresetBackup d, int id) => <String>[
     if (b < blockNames.length && d.isOn(id, b)) blockNames[b],
 ];
 
+/// The slots the filter lets through, in order.
+List<int> _shownSlots(PresetWorkspace w, PresetBackup d) => <int>[
+  for (int id = 0; id < d.usableCount; id++)
+    if (w.details.matches(id)) id,
+];
+
+/// The blocks as the chain row shows them, with the EQ at its head or tail
+/// (older clone firmware has none).
+List<int> _chipOrder(PresetBackup d, int id) => <int>[
+  if (!d.oldLayout && d.eqAtHead(id)) PresetWorkspace.eqBlock,
+  ...d.chain(id),
+  if (!d.oldLayout && !d.eqAtHead(id)) PresetWorkspace.eqBlock,
+];
+
+/// Moves [by] rows of the filtered list; from a slot the filter hides, the
+/// first step lands on the nearest shown slot that way.
+void _move(PresetWorkspace w, List<int> shown, int by) {
+  final int at = w.selected;
+  int i = shown.indexOf(at);
+  if (i < 0) {
+    // Index of the nearest shown slot past [at] in the direction moved.
+    i = by > 0
+        ? shown.indexWhere((int id) => id > at)
+        : shown.lastIndexWhere((int id) => id < at);
+    if (i < 0) {
+      return;
+    }
+    by -= by.sign;
+  }
+  w.select(shown[(i + by).clamp(0, shown.length - 1)]);
+}
+
+bool get _apple => <TargetPlatform>{
+  TargetPlatform.macOS,
+  TargetPlatform.iOS,
+}.contains(defaultTargetPlatform);
+
+/// Ctrl, or ⌘ on Apple systems.
+SingleActivator _ctrl(LogicalKeyboardKey key) =>
+    SingleActivator(key, control: !_apple, meta: _apple);
+
+String _ctrlLabel(String key) => _apple ? '⌘$key' : 'Ctrl+$key';
+
 /// `15`, `P15` or `p15` to its slot index; null outside the first [count].
 int? parseSlot(String text, [int count = presetCount]) {
   final String t = text.trim();
@@ -689,10 +767,16 @@ int? parseSlot(String text, [int count = presetCount]) {
 }
 
 /// The editor's keys, shown from the menu or with `?`.
-const List<(String, String)> _shortcuts = <(String, String)>[
-  ('←', 'Previous preset'),
-  ('→', 'Next preset'),
+List<(String, String)> get _shortcuts => <(String, String)>[
+  ('← ↑', 'Previous preset'),
+  ('→ ↓', 'Next preset'),
+  ('PgUp PgDn', '10 presets back or ahead'),
+  ('Home End', 'First or last preset'),
   ('F2', 'Go to a preset by number'),
+  ('1 – 7', 'Open a block, counting from the left of the chain'),
+  (_ctrlLabel('O'), 'Open a file'),
+  (_ctrlLabel('S'), 'Save to a file'),
+  (_ctrlLabel('R'), 'Read again from the pedal'),
   ('?', 'Show these shortcuts'),
 ];
 
@@ -731,7 +815,8 @@ Future<void> _showShortcuts(BuildContext context) {
             ),
           const SizedBox(height: 8),
           Text(
-            'Arrows change presets unless a knob or text field has focus.',
+            'Moving between presets follows the filter, except F2. Arrows '
+            'change presets unless a knob or text field has focus.',
             style: theme.textTheme.bodySmall,
           ),
         ],
