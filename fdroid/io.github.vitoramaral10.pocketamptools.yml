@@ -1,0 +1,46 @@
+Categories:
+  - Multimedia
+License: GPL-3.0-only
+SourceCode: https://github.com/vitoramaral10/pocket-amp-tools
+IssueTracker: https://github.com/vitoramaral10/pocket-amp-tools/issues
+Changelog: https://github.com/vitoramaral10/pocket-amp-tools/releases
+WebSite: https://vitoramaral10.github.io/pocket-amp-tools/
+
+AutoName: Pocket AMP Tools
+
+RepoType: git
+Repo: https://github.com/vitoramaral10/pocket-amp-tools.git
+
+AntiFeatures:
+  NonFreeNet:
+    en-US: The "Download official firmware" button fetches the pedal firmware
+      from M-VAVE's server; the firmware is not free software.
+
+Builds:
+  - versionName: 0.3.0
+    versionCode: 3
+    commit: v0.3.0
+    output: build/app/outputs/flutter-apk/app-release.apk
+    srclibs:
+      - flutter@3.47.9
+    rm:
+      - linux
+      - macos
+      - windows
+      - test_hardware
+    prebuild:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get
+    scandelete:
+      - .pub-cache
+    build:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk --release
+    ndk: r28c
+
+AutoUpdateMode: Version
+UpdateCheckMode: Tags ^v[0-9.]+$
+UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
+CurrentVersion: 0.3.0
+CurrentVersionCode: 3
