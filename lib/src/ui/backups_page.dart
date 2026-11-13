@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../presets/preset_backup.dart';
+import 'visuals.dart';
 
 /// The backups the app keeps on its own (one before every update), with a
 /// way to open one in the editor or restore it.
@@ -119,9 +120,12 @@ class _BackupsPageState extends State<BackupsPage> {
                 }
                 final List<(File, PresetBackup?, String?)> files = snap.data!;
                 if (files.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 32),
-                    child: Text('No backups yet.', textAlign: TextAlign.center),
+                  return const EmptyState(
+                    icon: Icons.inventory_2_outlined,
+                    title: 'No backups yet.',
+                    message:
+                        'Back up the pedal now, or let the app do it: it '
+                        'keeps a copy before every firmware update.',
                   );
                 }
                 return Card.outlined(
@@ -179,7 +183,7 @@ class _BackupTile extends StatelessWidget {
     final PresetBackup? b = backup;
     if (b == null && error == null) {
       return ListTile(
-        leading: const Icon(Icons.inventory_2_outlined),
+        leading: const IconBadge(Icons.memory),
         title: Text(name),
         subtitle: const Text(
           'Raw copy from older firmware: P01–P79 can be restored; P80 and '
@@ -194,13 +198,13 @@ class _BackupTile extends StatelessWidget {
     }
     if (b == null) {
       return ListTile(
-        leading: const Icon(Icons.error_outline),
+        leading: const IconBadge(Icons.error_outline),
         title: Text(name),
         subtitle: Text('Not readable: $error'),
       );
     }
     return ListTile(
-      leading: const Icon(Icons.inventory_2_outlined),
+      leading: const IconBadge(Icons.inventory_2_outlined),
       title: Text(b.created.toLocal().toString().substring(0, 16)),
       subtitle: Text('${b.identity} · $name'),
       trailing: MediaQuery.sizeOf(context).width < 640

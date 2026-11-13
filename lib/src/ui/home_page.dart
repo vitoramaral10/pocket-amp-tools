@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_selector/file_selector.dart';
@@ -10,8 +11,10 @@ import 'dart:ui' show AppExitResponse;
 
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 import '../firmware_package.dart';
+import '../library/library.dart';
 import '../midi/midi_backend.dart';
 import '../pedal_updater.dart';
 import '../presets/live_link.dart';
@@ -20,9 +23,13 @@ import '../presets/preset_service.dart';
 import '../presets/preset_session.dart';
 import '../net/capped_http.dart';
 import '../presets/ir_upload.dart';
+import '../presets/nam_file.dart';
+import '../telemetry.dart';
 import 'backups_page.dart';
-import 'cabinets_page.dart';
+import 'library_page.dart';
+import 'onboarding.dart';
 import 'presets_page.dart';
+import 'visuals.dart';
 
 /// Official download link published on M-VAVE's downloads page. The file is
 /// fetched from M-VAVE's own server; this app never redistributes it.
@@ -32,10 +39,13 @@ const String officialFirmwareUrl =
 enum _Stage { idle, updating, success, failed }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.backend});
+  const HomePage({super.key, this.backend, this.libraryRoot});
 
   /// Injected in tests; the platform backend otherwise.
   final MidiBackend? backend;
+
+  /// Injected in tests; `Documents/Pocket AMP Tools/Library` otherwise.
+  final Directory? libraryRoot;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -62,8 +72,15 @@ class _HomePageState extends State<HomePage> {
 
   final PresetWorkspace _workspace = PresetWorkspace();
 
-  /// 0 presets, 1 cabinets, 2 firmware, 3 backups.
+  /// 0 presets, 1 library, 2 firmware, 3 backups.
   int _section = 0;
+
+  Library? _library;
+  LibraryKind _libKind = LibraryKind.amp;
+
+  /// Null until read for [_libKind].
+  List<LibraryItem>? _libItems;
+  Map<int, String> _libLinks = <int, String>{};
 
   /// Whether the user wants edits played on the pedal; the link itself is
   /// closed around every other pedal operation.
@@ -96,7 +113,16 @@ class _HomePageState extends State<HomePage> {
     _presets = PresetService(backend);
     _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
     // Detection only sends the identity query, so it is safe to run unasked.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _detect());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      unawaited(_detect());
+      if (!await onboardingSeen()) {
+        if (mounted) {
+          await showOnboarding(context);
+        }
+      } else if (Telemetry.available && await Telemetry.choice() == null) {
+        await _askReports();
+      }
+    });
   }
 
   // Async work outlives the page when the window closes mid-task.
@@ -188,11 +214,8 @@ class _HomePageState extends State<HomePage> {
   void _addLog(String line) {
     final String stamp = DateTime.now().toIso8601String().substring(11, 19);
     // The log is copied into public bug reports: no user name in paths.
-    final String? home =
-        Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
-    final String shown = home == null || home.isEmpty
-        ? line
-        : line.replaceAll(home, '~');
+    final String shown = Telemetry.scrub(line)!;
+    Telemetry.log(shown);
     if (mounted) {
       setState(() => _log.add('$stamp  $shown'));
     }
@@ -279,6 +302,30 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Asks whether crash and update reports may be sent, and keeps the answer.
+  Future<void> _askReports() async {
+    final bool? yes = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Send error reports?'),
+        content: const Text(reportsExplained),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Don't send"),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(Telemetry.on ? 'Keep sending' : 'Send reports'),
+          ),
+        ],
+      ),
+    );
+    if (yes != null) {
+      await Telemetry.choose(yes);
+    }
+  }
+
   Future<void> _detect() async {
     if (_busy) {
       return;
@@ -314,7 +361,16 @@ class _HomePageState extends State<HomePage> {
         _detecting = false;
         _detectedOnce = true;
       });
-      await _startLive();
+      // Read the pedal on its own, unless a read or an opened file is shown.
+      final DetectedPedal? p = _pedal;
+      if (p != null &&
+          !p.inLoader &&
+          _workspace.onPedal == null &&
+          _workspace.draft == null) {
+        await _readPresetsNow(); // restarts the live link when done
+      } else {
+        await _startLive();
+      }
     }
   }
 
@@ -392,6 +448,11 @@ class _HomePageState extends State<HomePage> {
         _pedal!,
         (UpdateProgress p) => setState(() => _progress = p),
       );
+      Telemetry.update(
+        from: _pedal!.identity,
+        to: _package!.product,
+        after: after,
+      );
       _workspace.forgetPedal();
       setState(() {
         _stage = _Stage.success;
@@ -401,6 +462,11 @@ class _HomePageState extends State<HomePage> {
       await _detect();
     } catch (e) {
       _addLog('Update failed: $e');
+      Telemetry.update(
+        from: _pedal?.identity ?? '?',
+        to: _package?.product ?? '?',
+        error: e,
+      );
       setState(() {
         _stage = _Stage.failed;
         _resultMessage = '$e';
@@ -646,56 +712,227 @@ class _HomePageState extends State<HomePage> {
     return 'Read the names of the 20 AMP and 20 CAB slots.';
   });
 
-  Future<void> _replaceIr(int slot) async {
-    final XFile? file = await openFile(
-      acceptedTypeGroups: const <XTypeGroup>[
-        XTypeGroup(label: 'Impulse response', extensions: <String>['wav']),
-      ],
-    );
-    if (file == null) {
-      return;
-    }
-    final Uint8List pcm;
+  // --- library --------------------------------------------------------------
+
+  Future<Library> _lib() async => _library ??= Library(
+    widget.libraryRoot ??
+        Directory(
+          '${(await getApplicationDocumentsDirectory()).path}'
+          '${Platform.pathSeparator}Pocket AMP Tools'
+          '${Platform.pathSeparator}Library',
+        ),
+  );
+
+  Future<void> _loadLibrary() async {
+    final LibraryKind k = _libKind;
     try {
-      if (await file.length() > 1 << 20) {
-        throw const InvalidIrFile('the file is too large for a 2048-sample IR');
+      final Library lib = await _lib();
+      final List<LibraryItem> items = await lib.list(k);
+      final Map<int, String> links = await lib.links(k);
+      if (k == _libKind) {
+        setState(() {
+          _libItems = items;
+          _libLinks = links;
+        });
       }
-      pcm = parseIrWav(await file.readAsBytes());
     } on Object catch (e) {
-      if (e is! InvalidIrFile && e is! FileSystemException) {
+      if (e is! FileSystemException && e is! MissingPluginException) {
         rethrow;
       }
-      if (!mounted) {
-        return;
-      }
       setState(() {
-        _presetMessage = '${file.name}: $e';
+        _libItems = <LibraryItem>[];
+        _presetMessage = 'The library folder cannot be read: $e';
         _presetError = true;
       });
+    }
+  }
+
+  void _setLibKind(LibraryKind k) {
+    setState(() {
+      _libKind = k;
+      _libItems = null;
+      _libLinks = <int, String>{};
+      _presetMessage = null;
+    });
+    _loadLibrary();
+  }
+
+  void _libError(Object e) => setState(() {
+    _presetMessage = '$e';
+    _presetError = true;
+  });
+
+  Future<void> _importToLibrary() async {
+    final LibraryKind k = _libKind;
+    final List<XFile> files = await openFiles(
+      acceptedTypeGroups: <XTypeGroup>[
+        if (k == LibraryKind.amp)
+          const XTypeGroup(
+            label: 'NAM capture (A2)',
+            extensions: <String>['nam'],
+          )
+        else
+          const XTypeGroup(
+            label: 'Impulse response',
+            extensions: <String>['wav'],
+          ),
+      ],
+    );
+    if (files.isEmpty) {
+      return;
+    }
+    final Library lib = await _lib();
+    int added = 0;
+    final List<String> failed = <String>[];
+    for (final XFile f in files) {
+      try {
+        // An A2 file with every size is a few hundred KB; an IR, 6 KB.
+        if (await f.length() > 16 << 20) {
+          throw const LibraryException('the file is too large');
+        }
+        await lib.import(k, f.name, await f.readAsBytes());
+        added++;
+      } on Object catch (e) {
+        if (e is! InvalidNamFile &&
+            e is! InvalidIrFile &&
+            e is! LibraryException &&
+            e is! FileSystemException) {
+          rethrow;
+        }
+        failed.add('${f.name}: $e');
+      }
+    }
+    setState(() {
+      _presetMessage = <String>[
+        if (added > 0)
+          'Added $added file${added == 1 ? '' : 's'} to the library.',
+        ...failed,
+      ].join('\n');
+      _presetError = failed.isNotEmpty;
+    });
+    await _loadLibrary();
+  }
+
+  Future<void> _renameInLibrary(LibraryItem it) async {
+    final String? name = await askRename(context, it.name);
+    if (name == null) {
+      return;
+    }
+    try {
+      await (await _lib()).rename(it, name);
+    } on Object catch (e) {
+      if (e is! LibraryException && e is! FileSystemException) {
+        rethrow;
+      }
+      _libError(e);
+    }
+    await _loadLibrary();
+  }
+
+  Future<void> _deleteFromLibrary(LibraryItem it) async {
+    if (!await confirmDelete(context, it.name)) {
+      return;
+    }
+    try {
+      await (await _lib()).delete(it);
+    } on FileSystemException catch (e) {
+      _libError(e);
+    }
+    await _loadLibrary();
+  }
+
+  List<String>? _namesOf(LibraryKind k) =>
+      k == LibraryKind.amp ? _workspace.ampNames : _workspace.cabNames;
+
+  Future<void> _sendItem(LibraryItem it) async {
+    final List<String>? names = _namesOf(it.kind);
+    if (names == null) {
+      return;
+    }
+    final int? slot = await chooseSlot(
+      context,
+      it.kind == LibraryKind.amp ? 'AMP' : 'CAB',
+      it.name,
+      names,
+      _libLinks,
+    );
+    if (slot != null) {
+      await _sendToSlot(it, slot);
+    }
+  }
+
+  Future<void> _loadSlot(int slot) async {
+    final List<LibraryItem>? items = _libItems;
+    if (items == null || items.isEmpty) {
+      return;
+    }
+    final LibraryItem? it = await chooseItem(
+      context,
+      _libKind == LibraryKind.amp ? 'AMP' : 'CAB',
+      slot,
+      items,
+    );
+    if (it != null) {
+      await _sendToSlot(it, slot);
+    }
+  }
+
+  Future<void> _sendToSlot(LibraryItem it, int slot) async {
+    final bool amp = it.kind == LibraryKind.amp;
+    final Uint8List bytes;
+    try {
+      bytes = await it.file.readAsBytes();
+      Library.check(it.kind, bytes); // the file may have changed on disk
+    } on Object catch (e) {
+      if (e is! InvalidNamFile &&
+          e is! InvalidIrFile &&
+          e is! FileSystemException) {
+        rethrow;
+      }
+      _libError('${it.name}: $e');
       return;
     }
     if (!mounted) {
       return;
     }
-    final String? name = await confirmIrUpload(
+    final String? name = await confirmSlotUpload(
       context,
       slot,
-      _workspace.cabNames?[slot] ?? 'slot ${slot + 1}',
-      file.name.replaceAll(RegExp(r'\.wav$', caseSensitive: false), ''),
+      _namesOf(it.kind)?[slot] ?? 'slot ${slot + 1}',
+      it.name,
+      block: amp ? 'AMP' : 'CAB',
+      what: amp ? 'models' : 'IRs',
+      plays: amp ? 'model' : 'IR',
     );
     if (name == null) {
       return;
     }
-    await _runPresetTask('Sending the IR', () async {
-      _workspace.cabNames = await _presets.uploadIr(
-        _pedal!,
-        slot,
-        name,
-        pcm,
-        onProgress: (double f) => setState(() => _presetFraction = f),
-      );
-      return 'IR stored in CAB slot ${slot + 1} as "$name".';
-    });
+    await _runPresetTask(
+      amp ? 'Sending the model' : 'Sending the IR',
+      () async {
+        void progress(double f) => setState(() => _presetFraction = f);
+        if (amp) {
+          _workspace.ampNames = await _presets.uploadAmp(
+            _pedal!,
+            slot,
+            namFileToImage(utf8.decode(bytes), name),
+            onProgress: progress,
+          );
+        } else {
+          _workspace.cabNames = await _presets.uploadIr(
+            _pedal!,
+            slot,
+            name,
+            parseIrWav(bytes),
+            onProgress: progress,
+          );
+        }
+        await (await _lib()).link(it.kind, slot, it);
+        return '"${it.name}" stored in ${amp ? 'AMP' : 'CAB'} slot ${slot + 1} '
+            'as "$name".';
+      },
+    );
+    await _loadLibrary();
   }
 
   Future<void> _editBackup(PresetBackup b, String name) async {
@@ -828,7 +1065,7 @@ class _HomePageState extends State<HomePage> {
   static const List<(IconData, IconData, String)> _sections =
       <(IconData, IconData, String)>[
         (Icons.tune_outlined, Icons.tune, 'Presets'),
-        (Icons.speaker_outlined, Icons.speaker, 'Cabinets'),
+        (Icons.library_music_outlined, Icons.library_music, 'Library'),
         (Icons.system_update_alt_outlined, Icons.system_update_alt, 'Firmware'),
         (Icons.inventory_2_outlined, Icons.inventory_2, 'Backups'),
       ];
@@ -837,6 +1074,9 @@ class _HomePageState extends State<HomePage> {
     // The update screen stays up until the pedal is written.
     if (_stage != _Stage.updating) {
       setState(() => _section = i);
+      if (i == 1 && _libItems == null) {
+        _loadLibrary();
+      }
     }
   }
 
@@ -860,17 +1100,25 @@ class _HomePageState extends State<HomePage> {
         liveOn: _workspace.live != null,
         onLive: _setLive,
       ),
-      1 => CabinetsPage(
-        names: _workspace.cabNames,
+      1 => LibraryPage(
+        kind: _libKind,
+        onKind: _setLibKind,
+        items: _libItems,
+        links: _libLinks,
+        names: _namesOf(_libKind),
         canUsePedal: _pedal != null && !_pedal!.inLoader,
-        irNeedsUsb: _pedal?.port.bluetooth ?? false,
+        needsUsb: _pedal?.port.bluetooth ?? false,
         busy: _busy,
         task: _presetTask,
         fraction: _presetFraction,
         message: _presetMessage,
         messageIsError: _presetError,
         onReadNames: _readNames,
-        onReplace: _replaceIr,
+        onImport: _importToLibrary,
+        onRename: _renameInLibrary,
+        onDelete: _deleteFromLibrary,
+        onSendItem: _sendItem,
+        onLoadSlot: _loadSlot,
       ),
       2 => _firmwarePage(theme),
       _ => BackupsPage(
@@ -961,30 +1209,30 @@ class _HomePageState extends State<HomePage> {
         ? 'Connect it by USB (or pair it by Bluetooth) and close other MIDI apps'
         : p.port.bluetooth
         ? 'Bluetooth · presets only'
+        : p.presetsOnly
+        ? 'Firmware ${p.version} · presets only · ${p.port.name}'
         : p.inLoader
         ? 'In update mode · ${p.port.name}'
         : 'Firmware ${p.version} · ${p.port.name}';
     return AppBar(
-      backgroundColor: theme.colorScheme.surfaceContainer,
       titleSpacing: 16,
       title: Row(
         children: <Widget>[
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: p == null
-                ? theme.colorScheme.surfaceContainerHighest
+          _StatusLogo(
+            icon: _detecting
+                ? Icons.search
+                : p == null
+                ? Icons.usb_off
+                : p.port.bluetooth
+                ? Icons.bluetooth
+                : p.inLoader
+                ? Icons.system_update_alt
+                : Icons.check,
+            color: p == null
+                ? theme.colorScheme.outline
+                : p.inLoader
+                ? theme.colorScheme.tertiary
                 : theme.colorScheme.primary,
-            foregroundColor: p == null
-                ? theme.colorScheme.onSurfaceVariant
-                : theme.colorScheme.onPrimary,
-            child: Icon(
-              p == null
-                  ? Icons.usb_off
-                  : p.port.bluetooth
-                  ? Icons.bluetooth
-                  : Icons.usb,
-              size: 20,
-            ),
           ),
           const SizedBox(width: 12),
           Flexible(
@@ -1012,15 +1260,18 @@ class _HomePageState extends State<HomePage> {
       ),
       actions: <Widget>[
         if (MediaQuery.sizeOf(context).width >= 720)
-          FilledButton.tonalIcon(
-            onPressed: _busy ? null : _detect,
-            icon: _detecting
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh),
-            label: Text(p == null ? 'Detect pedal' : 'Detect again'),
+          // Material 2 stretches app bar actions to the bar's full height.
+          Center(
+            child: FilledButton.tonalIcon(
+              onPressed: _busy ? null : _detect,
+              icon: _detecting
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(p == null ? 'Detect pedal' : 'Detect again'),
+            ),
           )
         else
           IconButton.filledTonal(
@@ -1043,6 +1294,12 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
+        if (Telemetry.available)
+          IconButton(
+            tooltip: 'Error reports',
+            icon: const Icon(Icons.bug_report_outlined),
+            onPressed: _askReports,
+          ),
         IconButton(
           tooltip: 'About',
           icon: const Icon(Icons.info_outline),
@@ -1100,6 +1357,13 @@ class _HomePageState extends State<HomePage> {
                         )
                       : null,
                 ),
+              if (_package != null &&
+                  _pedal != null &&
+                  !_pedal!.inLoader &&
+                  !_pedal!.port.bluetooth) ...<Widget>[
+                _VersionBanner(from: _pedal!.version, to: _package!.version),
+                const SizedBox(height: 12),
+              ],
               _firmwareCard(theme),
               const SizedBox(height: 12),
               _pedalCard(theme),
@@ -1146,14 +1410,31 @@ class _HomePageState extends State<HomePage> {
       done: p != null,
       children: <Widget>[
         if (p != null) ...<Widget>[
-          _InfoRow('Product', reportedFamilyOf(p.product)),
-          _InfoRow('Version', p.version),
-          _InfoRow('Source', _packageSource ?? ''),
-          _InfoRow('SHA-256', '${p.sha256.substring(0, 16)}…'),
-          _InfoRow('Package', p.officialName ?? 'not a known official package'),
+          _InfoRow(
+            'Product',
+            reportedFamilyOf(p.product),
+            Icons.category_outlined,
+          ),
+          _InfoRow('Version', p.version, Icons.new_releases_outlined),
+          _InfoRow('Source', _packageSource ?? '', Icons.cloud_done_outlined),
+          _InfoRow(
+            'SHA-256',
+            '${p.sha256.substring(0, 16)}…',
+            Icons.fingerprint,
+          ),
+          _InfoRow(
+            'Package',
+            p.officialName ?? 'not a known official package',
+            p.officialName != null
+                ? Icons.verified_outlined
+                : Icons.help_outline,
+          ),
           _InfoRow(
             'Loader',
             p.hasKnownLoader ? 'known, verified' : 'UNKNOWN (refused)',
+            p.hasKnownLoader
+                ? Icons.verified_user_outlined
+                : Icons.gpp_bad_outlined,
           ),
           const SizedBox(height: 8),
         ] else if (_packageError != null) ...<Widget>[
@@ -1164,10 +1445,18 @@ class _HomePageState extends State<HomePage> {
           const SizedBox(height: 8),
         ] else
           const Padding(
-            padding: EdgeInsets.only(bottom: 8),
-            child: Text(
-              'Use the official .fwsc file from M-VAVE. Download it here or '
-              'open one you already have.',
+            padding: EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: <Widget>[
+                IconBadge(Icons.cloud_download_outlined),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Use the official .fwsc file from M-VAVE. Download it '
+                    'here or open one you already have.',
+                  ),
+                ),
+              ],
             ),
           ),
         Wrap(
@@ -1209,6 +1498,7 @@ class _HomePageState extends State<HomePage> {
           _InfoRow(
             'Model',
             p.rebrand == null ? p.family : '${p.rebrand} (${p.family})',
+            Icons.speaker_outlined,
           ),
           _InfoRow(
             'Installed',
@@ -1217,8 +1507,13 @@ class _HomePageState extends State<HomePage> {
                 : p.inLoader
                 ? 'update mode'
                 : p.version,
+            Icons.memory,
           ),
-          _InfoRow('Port', p.port.name),
+          _InfoRow(
+            'Port',
+            p.port.name,
+            p.port.bluetooth ? Icons.bluetooth : Icons.usb,
+          ),
           if (p.inLoader)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -1231,12 +1526,20 @@ class _HomePageState extends State<HomePage> {
         ] else
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              _detectedOnce
-                  ? 'No Pocket AMP found. Connect it with a USB data cable, '
-                        'turn it on, close the M-VAVE app and try again.'
-                  : 'Connect the pedal by USB, turn it on and close any other '
-                        'app that uses MIDI.',
+            child: Row(
+              children: <Widget>[
+                const IconBadge(Icons.usb_off),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    _detectedOnce
+                        ? 'No Pocket AMP found. Connect it with a USB data cable, '
+                              'turn it on, close the M-VAVE app and try again.'
+                        : 'Connect the pedal by USB, turn it on and close any other '
+                              'app that uses MIDI.',
+                  ),
+                ),
+              ],
             ),
           ),
       ],
@@ -1294,18 +1597,23 @@ class _StepCard extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow(this.label, this.value);
+  const _InfoRow(this.label, this.value, this.icon);
   final String label;
   final String value;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
+      padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          Padding(
+            padding: const EdgeInsets.only(right: 10, top: 1),
+            child: Icon(icon, size: 18, color: theme.colorScheme.primary),
+          ),
           SizedBox(
             width: 96,
             child: Text(
@@ -1325,35 +1633,168 @@ class _InfoRow extends StatelessWidget {
 class _WarningCard extends StatelessWidget {
   const _WarningCard();
 
+  static const List<(IconData, String)> _points = <(IconData, String)>[
+    (
+      Icons.save_outlined,
+      'A firmware update can overwrite some presets and their EQ. When it can '
+          'read them, the app backs up all 80 first and offers to restore them '
+          'when it is done.',
+    ),
+    (
+      Icons.battery_charging_full,
+      'Charge the battery and use a reliable USB data cable.',
+    ),
+    (
+      Icons.power_off_outlined,
+      'Do not unplug, turn off or let the computer sleep until the app says '
+          'it is done (about 2 minutes).',
+    ),
+    (
+      Icons.info_outline,
+      'Use at your own risk. This is a community tool, not affiliated with '
+          'M-VAVE.',
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
+    final Color on = theme.colorScheme.onErrorContainer;
     return Card(
       color: theme.colorScheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: DefaultTextStyle.merge(
-          style: TextStyle(color: theme.colorScheme.onErrorContainer),
-          child: const Column(
+          style: TextStyle(color: on),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                'Before you update',
-                style: TextStyle(fontWeight: FontWeight.w600),
+              Row(
+                children: <Widget>[
+                  Icon(Icons.warning_amber_rounded, color: on),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Before you update',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
               ),
-              SizedBox(height: 8),
-              Text(
-                '• A firmware update can overwrite some presets and their EQ. '
-                'When it can read them, the app backs up all 80 first and offers '
-                'to restore them when it is done.\n'
-                '• Charge the battery and use a reliable USB data cable.\n'
-                '• Do not unplug, turn off or let the computer sleep until the '
-                'app says it is done (about 2 minutes).\n'
-                '• Use at your own risk. This is a community tool, not '
-                'affiliated with M-VAVE.',
-              ),
+              const SizedBox(height: 12),
+              for (final (IconData icon, String text) in _points)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Icon(icon, size: 18, color: on),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(text)),
+                    ],
+                  ),
+                ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The app logo with a badge for the pedal's state, at the top left.
+class _StatusLogo extends StatelessWidget {
+  const _StatusLogo({required this.icon, required this.color});
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme c = Theme.of(context).colorScheme;
+    return SizedBox.square(
+      dimension: 44,
+      child: Stack(
+        children: <Widget>[
+          Image.asset('assets/icon/app_icon.png', width: 40, height: 40),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                border: Border.all(color: c.surface, width: 2),
+              ),
+              child: Icon(icon, size: 12, color: c.surface),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The version change an update makes, shown above the steps.
+class _VersionBanner extends StatelessWidget {
+  const _VersionBanner({required this.from, required this.to});
+  final String from;
+  final String to;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme c = theme.colorScheme;
+    return Card(
+      color: c.primaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: <Widget>[
+            const IconBadge(Icons.system_update_alt, size: 56, strong: true),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    from == to ? 'Already on this version' : 'Update ready',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: c.onPrimaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  // One text, so each version is still written only once on
+                  // screen (the pedal card names the installed one).
+                  Text.rich(
+                    TextSpan(
+                      children: <InlineSpan>[
+                        TextSpan(text: from),
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Icon(
+                              Icons.arrow_forward,
+                              size: 28,
+                              color: c.onPrimaryContainer,
+                            ),
+                          ),
+                        ),
+                        TextSpan(
+                          text: to,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ],
+                    ),
+                    semanticsLabel: 'From version $from to $to',
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: c.onPrimaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

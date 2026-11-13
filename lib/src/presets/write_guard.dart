@@ -7,6 +7,7 @@
 // new.
 
 import 'block_models.dart';
+import 'amp_upload.dart';
 import 'ir_upload.dart';
 import 'mefcs.dart';
 import 'preset_backup.dart' show blockNames;
@@ -156,14 +157,17 @@ String? _write(List<int> p) {
   return 'unknown write';
 }
 
-/// Route 05: only the IR upload, in the shapes traced from the official app.
+/// Route 05: only the IR upload, in the shapes traced from the official app,
+/// and the AMP network upload, which differs in the apply value and slot kind.
 String? _irWrite(List<int> p) {
   if (p.length == 16 && p[3] == 0x09) {
-    if (_is(p, 7, const <int>[0, 0, 0, 0xA0, 0x01, 0, 0, 0x02])) {
-      return null; // apply the buffer
+    if (_is(p, 7, const <int>[0, 0, 0, 0xA0, 0x01, 0, 0]) &&
+        (p[14] == 0x02 || p[14] == 0x01)) {
+      return null; // apply the buffer (2 CAB, 1 AMP)
     }
     return p[7] < irSlotCount &&
-            _is(p, 8, const <int>[0x01, 0, 0xF0, 0x01, 0, 0, 0x00])
+            (p[8] == 0x01 || p[8] == 0x00) &&
+            _is(p, 9, const <int>[0, 0xF0, 0x01, 0, 0, 0x00])
         ? null
         : 'unknown 16-byte write on route 05';
   }
@@ -173,10 +177,18 @@ String? _irWrite(List<int> p) {
     return 'bad IR buffer write';
   }
   final List<int> data = p.sublist(14, 14 + n);
+  if (offset == 0 && isNamHeader(data)) {
+    return n == irChunkLength ? null : 'network chunk off the grid';
+  }
   if (offset == 0 && !_isIrHeader(data)) {
     return 'IR buffer without a valid CAB header';
   }
   if (irChunkGrid[offset] == n || (offset == 0 && n == irHeaderLength)) {
+    return null;
+  }
+  // The other network chunks: the grid of a 7548- or 7836-byte image.
+  if (ampChunkGrid(namImageLength)[offset] == n ||
+      ampChunkGrid(namBendImageLength)[offset] == n) {
     return null;
   }
   return 'IR chunk off the grid';

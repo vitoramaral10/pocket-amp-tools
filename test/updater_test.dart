@@ -490,6 +490,30 @@ void main() {
       expect(pedal.arms, 0);
     });
 
+    test(
+      'a pedal not on the list with Pocket AMP presets is presets only',
+      () async {
+        final FakePedal pedal = FakePedal(
+          image: pkg.image,
+          identity: 'NEWBRAND_009',
+          bank: demoBank(),
+        );
+        final PedalUpdater up = updater(pedal);
+        final DetectedPedal found = (await up.detect())!;
+        expect(found.identity, 'NEWBRAND_009');
+        expect(found.presetsOnly, isTrue);
+        expect(
+          up.blockers(pkg, found).join(),
+          contains('not on the list of pedals confirmed'),
+        );
+        await expectLater(
+          up.update(pkg, found, (_) {}),
+          throwsA(isA<UpdateException>()),
+        );
+        expect(pedal.arms, 0);
+      },
+    );
+
     test('stops if a different device takes over the port', () async {
       final FakePedal pedal = FakePedal(image: pkg.image, identity: 'FM-1_015');
       await expectLater(

@@ -9,6 +9,7 @@ import 'dart:collection';
 import 'dart:typed_data';
 
 import 'firmware_package.dart';
+import 'presets/preset_backup.dart';
 import 'presets/preset_session.dart';
 import 'midi/midi_backend.dart';
 import 'ota_protocol.dart';
@@ -54,8 +55,13 @@ class UpdateTimings {
 
 /// A pedal that answered the identity query.
 class DetectedPedal {
-  const DetectedPedal(this.port, this.identity);
+  const DetectedPedal(this.port, this.identity, {this.presetsOnly = false});
   final MidiPortRef port;
+
+  /// A name not on the confirmed list whose preset area is laid out like a
+  /// Pocket AMP's: its presets can be used, its firmware is never updated.
+  /// An FM-1 answers the same identity query on the same chip.
+  final bool presetsOnly;
 
   /// e.g. `Pocket AMP_105`, or `ota-Pocket AMP_103` while in the loader.
   final String identity;
@@ -269,19 +275,55 @@ class PedalUpdater {
       supportedProducts.contains(familyOf(id));
 
   /// Looks for a supported pedal on every MIDI port. Only the identity query
-  /// is sent.
+  /// is sent, and preset reads to a device that answered it with a name not
+  /// on the list.
   Future<DetectedPedal?> detect() async {
     final List<MidiPortRef> ports = await _candidates();
     _log('Ports: ${ports.isEmpty ? '(none)' : ports.join(', ')}');
+    final List<(MidiPortRef, String)> unlisted = <(MidiPortRef, String)>[];
     for (final MidiPortRef p in ports) {
-      final (OtaLink, String)? hit = await _probe(p, _isSupported);
+      final (OtaLink, String)? hit = await _probe(p, (String id) {
+        if (_isSupported(id)) {
+          return true;
+        }
+        // In the loader there are no presets to look at.
+        if (!id.startsWith('ota-')) {
+          unlisted.add((p, id));
+        }
+        return false;
+      });
       if (hit != null) {
         await hit.$1.close();
         _log('Found "${hit.$2}" on ${p.name}');
         return DetectedPedal(p, hit.$2);
       }
     }
+    for (final (MidiPortRef p, String id) in unlisted) {
+      if (await _hasPocketAmpPresets(p)) {
+        _log('Found "$id" on ${p.name}, presets only');
+        return DetectedPedal(p, id, presetsOnly: true);
+      }
+    }
     return _detectBluetooth();
+  }
+
+  /// Whether the preset area on [port] reads like a Pocket AMP's, in the
+  /// V1.05 layout or the older one without an EQ table. Reads only.
+  Future<bool> _hasPocketAmpPresets(MidiPortRef port) async {
+    try {
+      final PresetSession s = PresetSession(await backend.open(port));
+      try {
+        await readPresetBank(s, '');
+        return true;
+      } on UnknownPresetLayout catch (e) {
+        return isOldPresetArea(e.area);
+      } finally {
+        await s.close();
+      }
+    } catch (e) {
+      _log('  ${port.name}: presets not readable ($e)');
+      return false;
+    }
   }
 
   /// A Pocket AMP over Bluetooth, confirmed by reading its active preset.
@@ -318,7 +360,11 @@ class PedalUpdater {
         'This package is for "${reportedFamilyOf(pkg.product)}", which this tool does not support.',
       if (!trustedLoaders.contains(pkg.loaderSha256))
         'The package carries an unknown update loader; refusing to use it.',
-      if (pedal.family != pkg.productFamily)
+      if (pedal.presetsOnly)
+        '"${pedal.family}" is not on the list of pedals confirmed to be a '
+            'Pocket AMP. Its presets can be used, but its firmware is not '
+            'updated: a different pedal on the same chip would be bricked.'
+      else if (pedal.family != pkg.productFamily)
         'The pedal is a "${pedal.family}" but the package is for "${pkg.productFamily}".',
       // Measured on a Pocket AMP 1.05: after reading the package it stops
       // asking for data instead of installing the version it already runs.

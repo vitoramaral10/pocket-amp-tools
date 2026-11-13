@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <!-- reverb: a sound and its reflections -->
+  <circle cx="4.5" cy="12" r="1.6" fill="#000" stroke="none"/>
+  <path d="M8.5 8a5.5 5.5 0 0 1 0 8"/>
+  <path d="M12.5 5a9.5 9.5 0 0 1 0 14" stroke-width="1.4"/>
+  <path d="M16.5 2.5a13 13 0 0 1 0 19" stroke-width="1.05"/>
+</svg>

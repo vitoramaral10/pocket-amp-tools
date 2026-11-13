@@ -10,6 +10,7 @@ import '../presets/live_link.dart';
 import '../presets/mefcs.dart';
 import '../presets/preset_backup.dart';
 import 'assistant_dialog.dart';
+import 'visuals.dart';
 
 /// The bank being edited and the bank last seen on the pedal, kept while the
 /// user moves between sections.
@@ -340,42 +341,19 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Icon(
-              Icons.tune,
-              size: 48,
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Edit your 80 presets',
-              style: theme.textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              page.canUsePedal
-                  ? 'Read them from the pedal, change models, knobs, the '
-                        'signal chain and the EQ, then write back only what '
-                        'changed. You can also open a backup file.'
-                  : 'Connect the pedal to read its presets, or open a backup '
-                        'file to edit it without the pedal.',
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: !page.busy && page.canUsePedal ? page.onRead : null,
-              icon: const Icon(Icons.download_for_offline_outlined),
-              label: const Text('Read presets from the pedal'),
-            ),
-          ],
-        ),
+    return EmptyState(
+      icon: Icons.tune,
+      title: 'Edit your 80 presets',
+      message: page.canUsePedal
+          ? 'Read them from the pedal, change models, knobs, the signal chain '
+                'and the EQ, then write back only what changed. You can also '
+                'open a backup file.'
+          : 'Connect the pedal to read its presets, or open a backup file to '
+                'edit it without the pedal.',
+      action: FilledButton.icon(
+        onPressed: !page.busy && page.canUsePedal ? page.onRead : null,
+        icon: const Icon(Icons.download_for_offline_outlined),
+        label: const Text('Read presets from the pedal'),
       ),
     );
   }
@@ -429,10 +407,10 @@ class _Editor extends StatelessWidget {
 
 /// One line per preset: AMP model, the blocks that are on, and a dot when it
 /// differs from the pedal.
-String _summary(PresetBackup d, int id) => <String>[
+List<String> _onBlocks(PresetBackup d, int id) => <String>[
   for (final int b in d.chain(id))
     if (b < blockNames.length && d.isOn(id, b)) blockNames[b],
-].join(' · ');
+];
 
 class _PresetList extends StatelessWidget {
   const _PresetList({
@@ -469,8 +447,23 @@ class _PresetList extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
-          subtitle: Text(
-            _summary(draft, id),
+          subtitle: Text.rich(
+            TextSpan(
+              children: <InlineSpan>[
+                for (final String b in _onBlocks(draft, id)) ...<InlineSpan>[
+                  WidgetSpan(
+                    alignment: PlaceholderAlignment.middle,
+                    child: BlockIcon(
+                      b,
+                      size: 14,
+                      color: blockInk(b, theme.brightness),
+                    ),
+                  ),
+                  TextSpan(text: ' $b  '),
+                ],
+              ],
+            ),
+            semanticsLabel: _onBlocks(draft, id).join(', '),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall,
@@ -756,31 +749,42 @@ class _ChainChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Like the pedal's screen, an "on" block is a solid box in its colour
+    // with white text. Off, it keeps its colour, faded, so every block is
+    // still told apart by colour.
     final ColorScheme c = theme.colorScheme;
+    final bool dark = theme.brightness == Brightness.dark;
+    final Color block = blockColor(name) ?? c.primary;
+    final Color fg = on
+        ? Colors.white
+        : blockInk(name, theme.brightness) ?? block;
     return Container(
       width: 120,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: on ? c.primaryContainer : c.surfaceContainerHighest,
+        color: on ? block : block.withValues(alpha: dark ? 0.22 : 0.14),
         borderRadius: BorderRadius.circular(12),
+        border: on ? null : Border.all(color: block.withValues(alpha: 0.45)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: <Widget>[
-          Text(
-            name,
-            style: theme.textTheme.labelLarge?.copyWith(
-              color: on ? c.onPrimaryContainer : c.onSurfaceVariant,
-            ),
+          Row(
+            children: <Widget>[
+              BlockIcon(name, size: 16, color: fg),
+              const SizedBox(width: 6),
+              Text(
+                name,
+                style: theme.textTheme.labelLarge?.copyWith(color: fg),
+              ),
+            ],
           ),
           Text(
             on ? model : 'off',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: on ? c.onPrimaryContainer : c.onSurfaceVariant,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: fg),
           ),
         ],
       ),
@@ -804,8 +808,14 @@ class _BlockCard extends StatelessWidget {
   final bool enabled;
   final void Function(void Function() change) edit;
 
+  // The card, its switch, list and sliders all take the block's colour.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Theme(
+    data: blockTheme(Theme.of(context), blockNames[block]),
+    child: Builder(builder: _card),
+  );
+
+  Widget _card(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final String name = blockNames[block];
     final int model = draft.model(id, block);
@@ -823,6 +833,8 @@ class _BlockCard extends StatelessWidget {
             children: <Widget>[
               Row(
                 children: <Widget>[
+                  IconBadge.block(name, size: 32, strong: on),
+                  const SizedBox(width: 10),
                   Text(name, style: theme.textTheme.titleMedium),
                   const Spacer(),
                   Switch(
@@ -905,7 +917,12 @@ class _EqCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Theme(
+    data: blockTheme(Theme.of(context), 'EQ'),
+    child: Builder(builder: _card),
+  );
+
+  Widget _card(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     if (!_writable) {
       return SizedBox(
