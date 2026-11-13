@@ -12,6 +12,8 @@ RepoType: git
 Repo: https://github.com/vitoramaral10/pocket-amp-tools.git
 
 AntiFeatures:
+  Tracking:
+    en-US: With the user's consent, crash and update reports go to Sentry.
   NonFreeNet:
     en-US: The "Download official firmware" button fetches the pedal firmware
       from M-VAVE's server; the firmware is not free software.
@@ -36,7 +38,7 @@ Builds:
       - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
-      - $$flutter$$/bin/flutter build apk --release
+      - $$flutter$$/bin/flutter build apk --release --dart-define=SENTRY_DSN=https://8c7abe2a014e101d473d76ca114ec196@o4511829580709888.ingest.us.sentry.io/4512418973548544
     ndk: r28c
 
 AutoUpdateMode: Version
