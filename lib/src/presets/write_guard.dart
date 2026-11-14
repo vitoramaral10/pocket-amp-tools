@@ -7,9 +7,11 @@
 // new.
 
 import 'block_models.dart';
+import 'amp_upload.dart';
 import 'ir_upload.dart';
 import 'mefcs.dart';
 import 'preset_backup.dart' show blockNames;
+import 'raw_flash.dart';
 
 class BlockedPacket implements Exception {
   const BlockedPacket(this.reason);
@@ -20,7 +22,7 @@ class BlockedPacket implements Exception {
 
 /// Throws [BlockedPacket] unless [p] is one of the packets this app may send.
 void checkOutgoing(List<int> p) {
-  if (p.length < 15 || p[0] != 0x00 || p[1] != 0x59 || p[5] != 0x00) {
+  if (p.length < 12 || p[0] != 0x00 || p[1] != 0x59 || p[5] != 0x00) {
     throw const BlockedPacket('not an M-EFCS request');
   }
   if ((p[3] | (p[4] << 8)) + 7 != p.length) {
@@ -29,9 +31,13 @@ void checkOutgoing(List<int> p) {
   if (p.last != mefcsChecksum(p)) {
     throw const BlockedPacket('bad checksum');
   }
+  if (p.length < 15 && p[2] != 0x21) {
+    throw const BlockedPacket('not an M-EFCS request');
+  }
   final String? why = switch (p[2]) {
     0x23 => _read(p),
     0x22 => _write(p),
+    0x21 => _rawErase(p),
     _ => 'unknown command',
   };
   if (why != null) {
@@ -53,6 +59,14 @@ int _le24(List<int> p, int at) => p[at] | (p[at + 1] << 8) | (p[at + 2] << 16);
 String? _read(List<int> p) {
   if (p.length != 15 || p[3] != 0x08) {
     return 'unknown read';
+  }
+  if (p[6] == 0x05 && p[10] == 0x70) {
+    final int length = _le24(p, 11);
+    return length > 0 &&
+            length <= rawFrameMax &&
+            _inPresetFlash(_le24(p, 7), length)
+        ? null
+        : 'raw read outside the preset flash';
   }
   if (p[6] == 0x05) {
     // Only the two name banks.
@@ -81,6 +95,15 @@ String? _read(List<int> p) {
 }
 
 String? _write(List<int> p) {
+  if (p[6] == 0x05 && p.length > 16 && p[10] == 0x70) {
+    final int n = _le24(p, 11);
+    return n > 0 &&
+            n <= rawFrameMax &&
+            p.length == 14 + n + 1 &&
+            _inPresetFlash(_le24(p, 7), n)
+        ? null
+        : 'raw write outside the preset flash';
+  }
   if (p[6] == 0x05) {
     return _irWrite(p);
   }
@@ -156,14 +179,31 @@ String? _write(List<int> p) {
   return 'unknown write';
 }
 
-/// Route 05: only the IR upload, in the shapes traced from the official app.
+/// Only the four 4 KB sectors of the two preset banks (raw_flash.dart).
+bool _inPresetFlash(int offset, int length) =>
+    offset >= rawAreaBase && offset + length <= rawAreaEnd;
+
+String? _rawErase(List<int> p) =>
+    p.length == 12 &&
+        p[3] == 0x05 &&
+        p[6] == 0x05 &&
+        p[10] == 0x70 &&
+        _le24(p, 7) % rawSectorSize == 0 &&
+        _inPresetFlash(_le24(p, 7), rawSectorSize)
+    ? null
+    : 'erase outside the preset flash';
+
+/// Route 05: only the IR upload, in the shapes traced from the official app,
+/// and the AMP network upload, which differs in the apply value and slot kind.
 String? _irWrite(List<int> p) {
   if (p.length == 16 && p[3] == 0x09) {
-    if (_is(p, 7, const <int>[0, 0, 0, 0xA0, 0x01, 0, 0, 0x02])) {
-      return null; // apply the buffer
+    if (_is(p, 7, const <int>[0, 0, 0, 0xA0, 0x01, 0, 0]) &&
+        (p[14] == 0x02 || p[14] == 0x01)) {
+      return null; // apply the buffer (2 CAB, 1 AMP)
     }
     return p[7] < irSlotCount &&
-            _is(p, 8, const <int>[0x01, 0, 0xF0, 0x01, 0, 0, 0x00])
+            (p[8] == 0x01 || p[8] == 0x00) &&
+            _is(p, 9, const <int>[0, 0xF0, 0x01, 0, 0, 0x00])
         ? null
         : 'unknown 16-byte write on route 05';
   }
@@ -173,10 +213,18 @@ String? _irWrite(List<int> p) {
     return 'bad IR buffer write';
   }
   final List<int> data = p.sublist(14, 14 + n);
+  if (offset == 0 && isNamHeader(data)) {
+    return n == irChunkLength ? null : 'network chunk off the grid';
+  }
   if (offset == 0 && !_isIrHeader(data)) {
     return 'IR buffer without a valid CAB header';
   }
   if (irChunkGrid[offset] == n || (offset == 0 && n == irHeaderLength)) {
+    return null;
+  }
+  // The other network chunks: the grid of a 7548- or 7836-byte image.
+  if (ampChunkGrid(namImageLength)[offset] == n ||
+      ampChunkGrid(namBendImageLength)[offset] == n) {
     return null;
   }
   return 'IR chunk off the grid';

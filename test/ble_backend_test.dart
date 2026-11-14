@@ -8,7 +8,6 @@ import 'package:pocket_amp_tools/src/midi/ble/gatt.dart';
 import 'package:pocket_amp_tools/src/midi/midi_backend.dart';
 import 'package:pocket_amp_tools/src/ota_protocol.dart';
 import 'package:pocket_amp_tools/src/pedal_updater.dart';
-import 'package:pocket_amp_tools/src/presets/ir_upload.dart';
 import 'package:pocket_amp_tools/src/presets/mefcs.dart';
 import 'package:pocket_amp_tools/src/presets/preset_session.dart';
 import 'package:pocket_amp_tools/src/presets/write_guard.dart';
@@ -158,7 +157,7 @@ void main() {
     await c.close();
   });
 
-  test('firmware and IR traffic never go over the radio', () async {
+  test('firmware traffic never goes over the radio', () async {
     final _Radio radio = _Radio(
       FakePedal(image: Uint8List(1024), bank: demoBank()),
     );
@@ -168,10 +167,6 @@ void main() {
     await expectLater(
       c.send(buildFrame(cmdIdentity, Uint8List(0))),
       throwsA(anyOf(isA<MidiIoException>(), isA<BlockedPacket>())),
-    );
-    await expectLater(
-      c.send(mefcsWrap(irSaveToSlotPacket(0))),
-      throwsA(isA<MidiIoException>()),
     );
     expect(radio.writes, isEmpty);
     await c.close();

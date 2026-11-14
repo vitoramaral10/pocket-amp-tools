@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pocket_amp_tools/src/library/library.dart';
 import 'package:pocket_amp_tools/src/presets/mefcs.dart';
 import 'package:pocket_amp_tools/src/ui/home_page.dart';
 
@@ -35,7 +37,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('1.03'), findsOneWidget);
-      expect(find.text('Detect again'), findsOneWidget);
+      expect(find.byTooltip('Detect again'), findsOneWidget);
       expect(tester.widget<ButtonStyleButton>(update).onPressed, isNull);
       // Let the presets read that starts on detection finish.
       for (int i = 0; i < 400; i++) {
@@ -44,6 +46,113 @@ void main() {
       }
     },
   );
+
+  testWidgets('the library adds a capture and sends it to an AMP slot', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final Directory tmp = Directory.systemTemp.createTempSync('library_ui_');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final Library lib = Library(Directory('${tmp.path}/Library'));
+    await tester.runAsync(
+      () => lib.import(
+        LibraryKind.amp,
+        'My Capture.nam',
+        File('test/fixtures/a2_lite_synthetic.nam').readAsBytesSync(),
+      ),
+    );
+    final FakePedal pedal = FakePedal(image: Uint8List(1024), bank: demoBank());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(backend: pedal, libraryRoot: lib.root),
+      ),
+    );
+    Future<void> settle([int n = 40]) async {
+      for (int i = 0; i < n; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    await settle(400); // detection, then the presets read it starts
+    await tester.tap(find.text('Library'));
+    await settle();
+    expect(find.text('My Capture'), findsOneWidget);
+    expect(find.text('Load from library…'), findsNWidgets(20));
+
+    await tester.tap(find.text('Send to pedal…'));
+    await settle(5);
+    await tester.tap(find.textContaining('20.  '));
+    await settle(5);
+    expect(find.text('Replace AMP slot 20?'), findsOneWidget);
+    await tester.tap(find.text('Replace'));
+    await settle(80);
+    expect(pedal.ampNames[19], 'My Capture');
+    expect(find.text('From your library: My Capture'), findsOneWidget);
+    expect(find.text('In slot 20'), findsOneWidget);
+
+    await tester.tap(find.text('Cabinets'));
+    await settle();
+    expect(find.text('Add WAV files…'), findsOneWidget);
+  });
+
+  testWidgets('on a phone the library sends a file from its menu', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final Directory tmp = Directory.systemTemp.createTempSync('library_ui_');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final Library lib = Library(Directory('${tmp.path}/Library'));
+    await tester.runAsync(
+      () => lib.import(
+        LibraryKind.amp,
+        'A Capture With A Long Name.nam',
+        File('test/fixtures/a2_lite_synthetic.nam').readAsBytesSync(),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(
+          backend: FakePedal(image: Uint8List(1024), bank: demoBank()),
+          libraryRoot: lib.root,
+        ),
+      ),
+    );
+    Future<void> settle([int n = 40]) async {
+      for (int i = 0; i < n; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    await settle(400); // detection, then the presets read it starts
+    await tester.tap(find.text('Library'));
+    await settle();
+    // The button would leave the name a few letters: it is in the menu.
+    expect(find.text('Send to pedal…'), findsNothing);
+    final double name = tester
+        .getSize(find.text('A Capture With A Long Name'))
+        .width;
+    expect(name, greaterThan(150));
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'A Capture With A Long Name'),
+        matching: find.byTooltip('More'),
+      ),
+    );
+    await settle(5);
+    await tester.tap(find.text('Send to pedal…'));
+    await settle(5);
+    expect(find.textContaining('20.  '), findsOneWidget);
+  });
 
   testWidgets('edits a preset and writes only that one to the pedal', (
     WidgetTester tester,
@@ -79,6 +188,9 @@ void main() {
     await settle();
     expect(pedal.active, 2, reason: 'selecting a preset plays it');
     final bool wasOn = bank[2 * presetSize + 8 + 3] != 0; // DLY of P03
+    // As in M-EFCS, a block's card opens from its chip in the chain.
+    await tester.tap(find.text('DLY'));
+    await settle();
     await tester.tap(
       find.descendant(
         of: find.ancestor(of: find.text('DLY'), matching: find.byType(Card)),
@@ -92,7 +204,8 @@ void main() {
       reason: 'the change is heard right away',
     );
     await tester.tap(find.text('Write 1 preset to pedal'));
-    await tester.pumpAndSettle();
+    // The setting for asking first is read from disk.
+    await settle();
     expect(find.text('Write presets to the pedal?'), findsOneWidget);
     await tester.tap(find.text('Write'));
     await settle();
@@ -133,23 +246,36 @@ void main() {
     pedal
       ..hold = Completer<void>()
       ..holdAt = before + 2; // detection's open, then the live link's
-    await tester.tap(find.text('Detect again'));
+    await tester.tap(find.byTooltip('Detect again'));
     for (int i = 0; i < 10 && pedal.opens < before + 2; i++) {
       await settle();
     }
     expect(pedal.opens, before + 2, reason: 'the live link is opening');
 
     // Another operation now must wait for that open and close it first;
-    // a second tap in the same frame must not start a second one.
-    await tester.tap(find.text('Read from pedal'));
-    await tester.tap(find.text('Read from pedal'));
+    // a second request in the same frame must not start a second one.
+    await tester.tap(find.byTooltip('Preset actions'));
+    await tester.pump();
+    final VoidCallback readNow = tester
+        .widget<MenuItemButton>(
+          find.widgetWithText(MenuItemButton, 'Read again from pedal'),
+        )
+        .onPressed!;
+    readNow();
+    readNow();
     await settle();
     pedal.hold!.complete();
+    // Success is a passing SnackBar: watch for it while things settle.
+    bool read = false;
     for (int i = 0; i < 6; i++) {
       await settle();
+      read |= find
+          .text('Read all 80 presets and their EQ.')
+          .evaluate()
+          .isNotEmpty;
     }
     expect(pedal.maxOpen, 1);
-    expect(find.text('Read all 80 presets and their EQ.'), findsOneWidget);
+    expect(read, isTrue);
   });
 
   group('live link and unsaved edits', () {
@@ -180,6 +306,8 @@ void main() {
     Future<void> editP03(WidgetTester tester) async {
       await tester.tap(find.text('P03'));
       await settle(tester);
+      await tester.tap(find.text('DLY'));
+      await settle(tester);
       await tester.tap(
         find.descendant(
           of: find.ancestor(of: find.text('DLY'), matching: find.byType(Card)),
@@ -189,15 +317,14 @@ void main() {
       await settle(tester);
     }
 
-    testWidgets('turning live off while it drains does not open a second '
-        'session', (WidgetTester tester) async {
+    testWidgets('reading while live drains does not open a second session', (
+      WidgetTester tester,
+    ) async {
       await start(tester);
       pedal.holdSend = Completer<void>();
       await tester.tap(find.text('P03')); // show() now waits in a send
       await tester.pump();
-      await tester.tap(find.text('Live on pedal'));
-      await tester.pump();
-      await tester.tap(find.text('Read from pedal'));
+      await readAgain(tester);
       await tester.pump();
       pedal.holdSend!.complete();
       pedal.holdSend = null;
@@ -213,7 +340,7 @@ void main() {
       await start(tester);
       await editP03(tester);
       expect(find.text('Write 1 preset to pedal'), findsOneWidget);
-      await tester.tap(find.text('Read from pedal'));
+      await readAgain(tester);
       await tester.pumpAndSettle();
       expect(find.text('Read the presets again?'), findsOneWidget);
       await tester.tap(find.text('Keep editing'));
@@ -227,7 +354,7 @@ void main() {
       await start(tester);
       await editP03(tester);
       pedal.present = false;
-      await tester.tap(find.text('Detect again'));
+      await tester.tap(find.byTooltip('Detect again'));
       for (
         int i = 0;
         i < 60 && find.text('No pedal connected').evaluate().isEmpty;
@@ -237,16 +364,57 @@ void main() {
       }
       expect(find.text('No pedal connected'), findsOneWidget);
       pedal.present = true;
-      await tester.tap(find.text('Detect pedal'));
+      await tester.tap(find.byTooltip('Detect pedal'));
+      for (int i = 0; i < 20 && pedal.openNow == 0; i++) {
+        await settle(tester);
+      }
+      expect(find.text('Write 1 preset to pedal'), findsOneWidget);
+      expect(pedal.openNow, 1, reason: 'the live link is open again');
+    });
+
+    testWidgets('unplugging the pedal with nothing edited clears the editor', (
+      WidgetTester tester,
+    ) async {
+      await start(tester);
+      expect(find.text('P03'), findsWidgets);
+      pedal.present = false;
       for (
         int i = 0;
-        i < 20 && find.text('Live on pedal').evaluate().isEmpty;
+        i < 60 && find.text('No pedal connected').evaluate().isEmpty;
         i++
       ) {
         await settle(tester);
       }
+      expect(find.text('No pedal connected'), findsOneWidget);
+      expect(find.text('P03'), findsNothing);
+
+      pedal.present = true;
+      for (int i = 0; i < 60 && find.text('P03').evaluate().isEmpty; i++) {
+        await settle(tester);
+      }
+      expect(find.text('P03'), findsWidgets, reason: 'read again on its own');
+    });
+
+    testWidgets('unplugging and plugging the pedal back needs no click', (
+      WidgetTester tester,
+    ) async {
+      await start(tester);
+      await editP03(tester);
+      pedal.present = false;
+      for (
+        int i = 0;
+        i < 60 && find.text('No pedal connected').evaluate().isEmpty;
+        i++
+      ) {
+        await settle(tester);
+      }
+      expect(find.text('No pedal connected'), findsOneWidget);
+      pedal.present = true;
+      for (int i = 0; i < 60 && pedal.openNow == 0; i++) {
+        await settle(tester);
+      }
       expect(find.text('Write 1 preset to pedal'), findsOneWidget);
-      expect(find.text('Live on pedal'), findsOneWidget);
+      expect(pedal.openNow, 1, reason: 'the live link is open again');
     });
   });
 
@@ -275,6 +443,8 @@ void main() {
     for (int i = 0; i < 10 && find.text('P03').evaluate().isEmpty; i++) {
       await settle();
     }
+    await tester.tap(find.text('EQ'));
+    await settle();
     expect(find.textContaining('cannot write back'), findsOneWidget);
     await tester.ensureVisible(find.text('Reset EQ (off, flat)'));
     await tester.pumpAndSettle();
@@ -331,4 +501,11 @@ Future<bool?> _askWithoutBackup(WidgetTester tester, String button) async {
   }
   await tester.pumpAndSettle();
   return answer;
+}
+
+/// Reading again sits in the app bar's preset menu.
+Future<void> readAgain(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Preset actions'));
+  await tester.pump();
+  await tester.tap(find.text('Read again from pedal'));
 }

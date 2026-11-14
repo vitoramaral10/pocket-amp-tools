@@ -14,9 +14,8 @@ import 'gatt.dart';
 /// raw, without SysEx; this backend unwraps what the app sends and wraps
 /// what comes back, so the rest of the app sees an ordinary MIDI port.
 ///
-/// Only preset traffic crosses: the firmware update protocol is not sent,
-/// and neither is the IR upload, whose large packets were never tried over
-/// the radio. Every packet also passes [checkOutgoing].
+/// Only M-EFCS traffic crosses (presets, IR and model uploads): the firmware
+/// update protocol is not sent. Every packet also passes [checkOutgoing].
 class BleBackend implements MidiBackend {
   BleBackend({
     BleGattClient? client,
@@ -30,6 +29,11 @@ class BleBackend implements MidiBackend {
   static const String nameHint = 'pocket amp_ble';
 
   final BleGattClient _client;
+
+  /// Carries the pedal's name or its tunnel service.
+  static bool looksLikePedal(BleDeviceInfo d) =>
+      d.name.toLowerCase().contains(nameHint) ||
+      d.serviceUuids.contains(tunnelService);
   final Duration scanWindow;
   final Duration scanCooldown;
   DateTime? _lastScan;
@@ -47,9 +51,7 @@ class BleBackend implements MidiBackend {
         ))
           // Only a pedal paired with this computer: any device nearby can
           // carry the name or the service.
-          if (d.paired &&
-              (d.name.toLowerCase().contains(nameHint) ||
-                  d.serviceUuids.contains(tunnelService)))
+          if (d.paired && looksLikePedal(d))
             MidiPortRef(
               id: d.id,
               name: d.name.isEmpty ? d.address : d.name,
@@ -122,9 +124,6 @@ class BleConnection implements MidiConnection {
         'Only preset traffic goes over Bluetooth; firmware updates need the '
         'USB cable.',
       );
-    }
-    if (packet[2] == 0x22 && packet[6] == 0x05) {
-      throw const MidiIoException('Uploading an IR needs the USB cable.');
     }
     checkOutgoing(packet);
     // A request starts a new answer: drop the rest of a cut-off one, which

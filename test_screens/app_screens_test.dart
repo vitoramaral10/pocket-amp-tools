@@ -45,6 +45,26 @@ void main() {
   final String fonts =
       '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts';
 
+  // Each screen gets its own app folder where the introduction was seen,
+  // so it does not cover the screen.
+  setUp(() {
+    final Directory dir = Directory.systemTemp.createTempSync('pa-');
+    File('${dir.path}/onboarded').writeAsStringSync('1');
+    // Names, labels and ratings for a few slots, as a user would give them.
+    File('${dir.path}/preset-details.json').writeAsStringSync(
+      '{"labels": {"tags": ["Headphones", "Live"]}, "presets": {'
+      '"P01": {"name": "British Clean Echo", "genres": ["Blues", "Pop"], '
+      '"uses": ["Rhythm", "Arpeggios"], "tags": ["Headphones"], "rating": 4, '
+      '"description": "Mostly clean and bright, with a short echo behind."}, '
+      '"P02": {"name": "RAT British Rock", "genres": ["Rock", "Punk"], '
+      '"uses": ["Riffs"], "rating": 3}, '
+      '"P04": {"name": "High Gain Lead", "genres": ["Hard rock"], '
+      '"uses": ["Riffs", "Solo"], "tags": ["Live"], "rating": 5}}}',
+    );
+    PathProviderPlatform.instance = _Paths(dir.path);
+    addTearDown(() => dir.deleteSync(recursive: true));
+  });
+
   setUpAll(() async {
     await _loadFont('Roboto', <String>[
       '$fonts/Roboto-Regular.ttf',
@@ -69,7 +89,11 @@ void main() {
       final Uint8List pkg = File(fwsc!).readAsBytesSync();
       await http.runWithClient(() async {
         await tester.pumpWidget(
-          PocketAmpApp(backend: FakePedal(image: Uint8List(1024))),
+          // With presets to give: they are read on detection, and a pedal
+          // without them leaves that read waiting past the end of the test.
+          PocketAmpApp(
+            backend: FakePedal(image: Uint8List(1024), bank: demoBank()),
+          ),
         );
         // Detection and the download run on real time, as in home_page_test.
         await tester.runAsync(
@@ -100,13 +124,19 @@ void main() {
       ('presets', const Size(2560, 1600)),
       ('presets-narrow', const Size(840, 1720)),
       ('firmware', const Size(2560, 1600)),
-      ('cabinets', const Size(2560, 1600)),
+      ('library', const Size(2560, 1600)),
       ('backups', const Size(2560, 1600)),
+      // A phone (360x780 at 3x), for the store listing and the website.
+      ('phone-presets', const Size(1080, 2340)),
+      ('phone-library', const Size(1080, 2340)),
+      ('phone-backups', const Size(1080, 2340)),
     ]) {
+      final bool phone = name.startsWith('phone-');
+      final String screen = phone ? name.substring(6) : name;
       testWidgets('$name, ${b.name}', (WidgetTester tester) async {
         debugDisableShadows = false;
         tester.view.physicalSize = size;
-        tester.view.devicePixelRatio = 2;
+        tester.view.devicePixelRatio = phone ? 3 : 2;
         tester.platformDispatcher.platformBrightnessTestValue = b;
         addTearDown(tester.view.reset);
         addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
@@ -129,16 +159,17 @@ void main() {
             ),
           );
           await settle();
-          if (name == 'firmware') {
+          if (screen == 'firmware') {
             await tester.tap(find.text('Firmware'));
             await tester.pump();
             await tester.tap(find.text('Download from M-VAVE'));
             await settle();
             return;
           }
-          if (name == 'backups') {
+          if (screen == 'backups') {
             final Directory dir = Directory.systemTemp.createTempSync('pa-');
             addTearDown(() => dir.deleteSync(recursive: true));
+            File('${dir.path}/onboarded').writeAsStringSync('1');
             PathProviderPlatform.instance = _Paths(dir.path);
             await tester.runAsync(() async {
               for (final (int days, String id) in <(int, String)>[
@@ -173,10 +204,33 @@ void main() {
             await tester.pump(const Duration(milliseconds: 300));
             return;
           }
-          if (name == 'cabinets') {
-            await tester.tap(find.text('Cabinets'));
+          if (screen == 'library') {
+            final Directory dir = Directory.systemTemp.createTempSync('pa-');
+            addTearDown(() => dir.deleteSync(recursive: true));
+            PathProviderPlatform.instance = _Paths(dir.path);
+            File('${dir.path}/onboarded').writeAsStringSync('1');
+            // A few captures, two of them already on the pedal. Only the
+            // names are shown, so the files can be empty.
+            final String lib = '${dir.path}/Pocket AMP Tools/Library';
+            for (final String f in <String>[
+              'British 800 Crunch',
+              'Chime Top Boost',
+              'Modern High Gain Lead',
+              'Tweed Clean',
+            ]) {
+              File('$lib/Amps/$f.nam').createSync(recursive: true);
+            }
+            File('$lib/links.json').writeAsStringSync(
+              '{"amp": {"18": "Tweed Clean.nam", '
+              '"19": "British 800 Crunch.nam"}}',
+            );
+            // The library is read from disk, which runs on real time only.
+            await tester.runAsync(() async {
+              await tester.tap(find.text('Library'));
+              await tester.pump();
+              await Future<void>.delayed(const Duration(milliseconds: 500));
+            });
             await tester.pump();
-            await tester.tap(find.text('Read from pedal'));
             await settle();
             await settle();
             return;
@@ -188,20 +242,19 @@ void main() {
             await tester.tap(find.text('P05'));
           }
           await tester.pump();
-          // One edit, so the "write" button and the changed marker show.
-          await tester.tap(
-            find
-                .descendant(
-                  of: find.ancestor(
-                    of: find.text('FX'),
-                    matching: find.byType(Card),
-                  ),
-                  matching: find.byType(Switch),
-                )
-                .first,
-          );
+          if (phone) {
+            return; // the editor as it opens, with the AMP block
+          }
+          // One edit, so the "write" button and the changed marker show:
+          // open the FX block and flip its switch.
+          await tester.tap(find.text('FX').first);
+          await tester.pumpAndSettle();
+          await tester.tap(find.byType(Switch).first);
           await tester.pumpAndSettle();
         }, () => MockClient((_) async => http.Response.bytes(pkg, 200)));
+        // Let the "Read all 80 presets" snackbar leave the picture.
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pump(const Duration(seconds: 1));
 
         await expectLater(
           find.byType(PocketAmpApp),

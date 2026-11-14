@@ -1,5 +1,5 @@
 name: Bug report
-description: Something went wrong while detecting or updating the pedal.
+description: Something went wrong while detecting, editing or updating the pedal.
 labels: [bug]
 body:
   - type: markdown
@@ -10,26 +10,26 @@ body:
     id: os
     attributes:
       label: Operating system
-      options: [Windows, macOS, Linux]
+      options: [Windows, macOS, Linux, Android]
     validations:
       required: true
   - type: input
     id: os_version
     attributes:
       label: System version
-      placeholder: e.g. Windows 11 23H2, macOS 15.1, Ubuntu 24.04
+      placeholder: e.g. Windows 11 23H2, macOS 15.1, Ubuntu 24.04, Android 15
   - type: input
     id: app_version
     attributes:
       label: App version
-      placeholder: e.g. v0.2.0-beta.1
+      placeholder: e.g. v0.3.0
     validations:
       required: true
   - type: input
     id: firmware
     attributes:
-      label: Firmware on the pedal before, and the file you used
-      placeholder: e.g. 1.03 -> official Pocket AMP V1.05 download
+      label: Pedal (brand and model), its firmware, and the firmware file if you were updating
+      placeholder: e.g. Donner Pocket AMP, 1.03 -> official Pocket AMP V1.05 download
   - type: textarea
     id: what
     attributes:
@@ -52,7 +52,7 @@ body:
     id: log
     attributes:
       label: App log
-      description: In the app, open **Details** and click **Copy for a bug report**, then paste here.
+      description: In the app, open **⋮ → Settings**, click **Copy for a bug report**, then paste here.
       render: text
     validations:
       required: true

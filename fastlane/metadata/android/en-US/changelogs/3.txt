@@ -1,0 +1,6 @@
+First Android release.
+* For every Pocket AMP, whatever the brand: M-VAVE, Donner, Coolmusic PIXIE1, New Bee SK17.
+* Connects over Bluetooth (pair from the app) or USB-C.
+* Edit presets live, name and rate them, back up and restore.
+* Send your own IRs and A2 .nam amp captures to the pedal.
+* Firmware updates need the USB cable; Bluetooth cannot carry them.

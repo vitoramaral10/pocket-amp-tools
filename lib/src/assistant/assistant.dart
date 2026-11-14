@@ -1,29 +1,34 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //
-// Asks an AI model for a preset. The user brings the service: any endpoint
-// that speaks the OpenAI chat-completions format (a provider, a proxy, a
-// local server). The app sends the request and the current preset, and gets
-// back one preset in the backup file's shape, which is then checked like a
-// file. Nothing here talks to the pedal.
+// The assistant's settings and the pieces its agent shares: the service it
+// asks (any endpoint that speaks the OpenAI chat-completions format: a
+// provider, a proxy, a local server), the errors those services answer, and
+// laying a partial preset over a whole one. Nothing here talks to the
+// pedal.
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-
-import '../net/capped_http.dart';
 
 import '../presets/block_models.dart';
 import '../presets/preset_backup.dart' show knobLabels, knobNames;
 
 class AssistantSettings {
   const AssistantSettings({
+    this.provider = '',
     this.baseUrl = '',
     this.model = '',
     this.apiKey = '',
+    this.autoWrite = false,
   });
+
+  /// Lets the assistant write the pedal's flash (send to a slot, write
+  /// presets) without asking each time.
+  final bool autoWrite;
+
+  /// The [AiProvider.id] picked in Settings, or empty for a custom address.
+  final String provider;
 
   /// e.g. `https://api.example.com/v1`; `/chat/completions` is added.
   final String baseUrl;
@@ -71,9 +76,11 @@ class AssistantSettings {
       final Object? j = jsonDecode(await (await _file()).readAsString());
       if (j is Map<String, Object?>) {
         return AssistantSettings(
+          provider: j['provider'] as String? ?? '',
           baseUrl: j['baseUrl'] as String? ?? '',
           model: j['model'] as String? ?? '',
           apiKey: j['apiKey'] as String? ?? '',
+          autoWrite: j['autoWrite'] == true,
         );
       }
     } catch (_) {
@@ -97,10 +104,12 @@ class AssistantSettings {
       }
     }
     await tmp.writeAsString(
-      jsonEncode(<String, String>{
+      jsonEncode(<String, Object>{
+        'provider': provider,
         'baseUrl': baseUrl.trim(),
         'model': model.trim(),
         'apiKey': apiKey.trim(),
+        'autoWrite': autoWrite,
       }),
       flush: true,
     );
@@ -115,174 +124,33 @@ class AssistantException implements Exception {
   String toString() => message;
 }
 
-/// What the model is told about the preset format and the pedal.
-String assistantSystemPrompt() {
-  final StringBuffer models = StringBuffer();
-  blockModels.forEach((String block, List<(String, List<String>)> list) {
-    models.writeln('$block:');
-    for (final (String name, List<String> knobs) in list) {
-      models.writeln('  "$name": ${knobs.join(', ')}');
-    }
-  });
-  return '''
-You design presets for the M-VAVE Pocket AMP, a guitar multi-effects pedal.
-A preset is a JSON object with this shape:
-{"volume": 0-100,
- "chain": the six blocks "FX","AMP","MOD","DLY","REV","CAB" in signal order, each once; FX and AMP must be the first two (in either order), the other four in any order,
- "blocks": {"FX": {"on": true|false, "model": "<model name>", "knobs": [{"label": "<knob>", "value": 0-100}, ... six entries]}, ... one entry per block},
- "eq": {"on": true|false, "position": "head"|"tail", "bands": [five whole numbers from -6 to 6]}}
-Each block's "knobs" is a list of exactly six entries, in the order of the model's knobs below; the position decides which knob a value sets, the "label" is only a reminder. Positions past the model's knobs are unused (for example a model with four knobs has unused 5th and 6th entries); keep their values as they are, or 0.
-Models and their knobs per block (firmware V1.05):
-$models
-Change only what the request needs; keep everything else as in the current preset.
-Answer with the JSON object only, no text before or after it.''';
-}
-
-/// One request to the model. Returns the preset as decoded JSON.
-Future<Map<String, Object?>> askAssistant(
-  AssistantSettings settings,
-  String request,
-  Map<String, Object> currentPreset,
-) async {
-  if (!settings.ready) {
-    throw const AssistantException(
-      'Set the assistant address and model first.',
-    );
-  }
-  if (settings.keyWouldLeakInClear) {
-    throw const AssistantException(
-      'The API key would be sent unencrypted. Use an https:// address, or '
-      'leave the key empty for a server on this computer.',
-    );
-  }
-  final Map<String, Object> current = Map<String, Object>.of(currentPreset)
-    ..remove('preset');
-  final int status;
-  final Uint8List bytes;
+/// The error message in a service's error body, in the shapes they use:
+/// `{"error": {"message": …}}`, `{"error": "…"}` or `{"message": …}`.
+/// Cut short: it goes into one line on screen.
+String? serviceError(List<int> bytes) {
+  Object? j;
   try {
-    final http.Request post = http.Request('POST', settings.endpoint)
-      // A redirect would carry the key to a host the user did not set.
-      ..followRedirects = false
-      ..headers.addAll(<String, String>{
-        'content-type': 'application/json',
-        if (settings.apiKey.trim().isNotEmpty)
-          'authorization': 'Bearer ${settings.apiKey.trim()}',
-      })
-      ..body = jsonEncode(<String, Object>{
-        'model': settings.model.trim(),
-        'stream': false,
-        'messages': <Map<String, String>>[
-          <String, String>{
-            'role': 'system',
-            'content': assistantSystemPrompt(),
-          },
-          <String, String>{
-            'role': 'user',
-            'content':
-                'Request: $request\n\nCurrent preset:\n${jsonEncode(current)}',
-          },
-        ],
-      });
-    // Slow on purpose: a local model on a CPU can take minutes.
-    (status, bytes) = await sendCapped(
-      post,
-      1 << 20,
-      timeout: const Duration(seconds: 120),
-    );
-  } on TooLarge {
-    throw const AssistantException('The assistant answered too much text.');
-  } catch (e) {
-    throw AssistantException('Could not reach the assistant: $e');
-  }
-  if (status == 401 || status == 403) {
-    throw const AssistantException('The assistant refused the API key.');
-  }
-  if (status != 200) {
-    throw AssistantException(
-      'The assistant answered HTTP $status. Check the address and the '
-      'model name.',
-    );
-  }
-  final Map<String, Object?>? preset;
-  try {
-    preset = firstJsonObject(_content(jsonDecode(utf8.decode(bytes))));
+    j = jsonDecode(utf8.decode(bytes, allowMalformed: true));
   } on FormatException {
-    throw const AssistantException(
-      'The assistant did not answer in the chat-completions format.',
-    );
-  }
-  if (preset == null) {
-    throw const AssistantException('The assistant did not answer a preset.');
-  }
-  return preset;
-}
-
-/// The text of a chat-completions answer: `content` as a string, or as a
-/// list of parts with `text` (what some proxies pass through).
-String? _content(Object? body) {
-  if (body is! Map) {
     return null;
   }
-  final Object? choices = body['choices'];
-  if (choices is! List || choices.isEmpty || choices.first is! Map) {
+  if (j is List && j.isNotEmpty) {
+    j = j.first; // Gemini wraps its error in a list
+  }
+  if (j is! Map) {
     return null;
   }
-  final Object? message = (choices.first as Map)['message'];
-  final Object? content = message is Map ? message['content'] : null;
-  if (content is String) {
-    return content;
-  }
-  if (content is List) {
-    return content
-        .whereType<Map>()
-        .map((Map p) => p['text'])
-        .whereType<String>()
-        .join();
-  }
-  return null;
-}
-
-/// The first complete JSON object in [text], skipping code fences or words
-/// around it.
-Map<String, Object?>? firstJsonObject(String? text) {
-  if (text == null) {
+  final Object? error = j['error'];
+  final Object? text = error is Map
+      ? error['message']
+      : error is String
+      ? error
+      : j['message'];
+  if (text is! String || text.trim().isEmpty) {
     return null;
   }
-  // A few starting braces at most: each try scans to the end of the text.
-  int tries = 0;
-  for (
-    int start = text.indexOf('{');
-    start >= 0 && tries++ < 8;
-    start = text.indexOf('{', start + 1)
-  ) {
-    int depth = 0;
-    bool inString = false;
-    for (int i = start; i < text.length; i++) {
-      final String c = text[i];
-      if (inString) {
-        if (c == r'\') {
-          i++;
-        } else if (c == '"') {
-          inString = false;
-        }
-      } else if (c == '"') {
-        inString = true;
-      } else if (c == '{') {
-        depth++;
-      } else if (c == '}' && --depth == 0) {
-        try {
-          final Object? j = jsonDecode(text.substring(start, i + 1));
-          if (j is Map<String, Object?>) {
-            return j;
-          }
-        } on FormatException {
-          // Not JSON after all; try the next brace.
-        }
-        break;
-      }
-    }
-  }
-  return null;
+  final String t = text.trim();
+  return t.length > 300 ? '${t.substring(0, 300)}…' : t;
 }
 
 /// Lays [answer] over [current] (both in the backup file's preset shape), so
@@ -295,10 +163,24 @@ Map<String, Object?> mergeSuggestion(
 ) {
   final Map<String, Object?> out = Map<String, Object?>.of(current)
     ..remove('preset');
-  for (final String key in <String>['volume', 'chain', 'eq']) {
+  for (final String key in <String>['volume', 'chain']) {
     if (answer.containsKey(key)) {
       out[key] = answer[key];
     }
+  }
+  // The EQ, like a block, keeps what the answer leaves out (only the bands,
+  // say).
+  final Object? answerEq = answer['eq'];
+  final Object? currentEq = current['eq'];
+  if (answerEq is Map && currentEq is Map) {
+    out['eq'] = <String, Object?>{
+      for (final MapEntry<Object?, Object?> e in currentEq.entries)
+        '${e.key}': e.value,
+      for (final MapEntry<Object?, Object?> e in answerEq.entries)
+        '${e.key}': e.value,
+    };
+  } else if (answer.containsKey('eq')) {
+    out['eq'] = answerEq;
   }
   final Object? answerBlocks = answer['blocks'];
   final Object? currentBlocks = current['blocks'];
