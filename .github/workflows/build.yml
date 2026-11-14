@@ -44,6 +44,9 @@ jobs:
           - os: macos-latest
             target: macos
             artifact: pocket-amp-tools-macos.zip
+          - os: ubuntu-latest
+            target: apk
+            artifact: pocket-amp-tools-android.apk
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -104,6 +107,22 @@ jobs:
         if: matrix.target == 'macos'
         run: |
           ditto -c -k --sequesterRsrc --keepParent "build/macos/Build/Products/Release/Pocket AMP Tools.app" ${{ matrix.artifact }}
+
+      - name: Package (Android)
+        if: matrix.target == 'apk'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          # Gradle leaves the APK unsigned, as F-Droid needs it; the copy on
+          # the releases page is signed here. Without the secrets (a fork)
+          # this step fails rather than ship an APK nobody can install.
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)/apksigner"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.p12"
+          "$apksigner" sign --ks "$RUNNER_TEMP/release.p12" --ks-pass env:KEYSTORE_PASSWORD \
+            --out ${{ matrix.artifact }} build/app/outputs/flutter-apk/app-release.apk
+          rm "$RUNNER_TEMP/release.p12"
+          "$apksigner" verify --print-certs ${{ matrix.artifact }}
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

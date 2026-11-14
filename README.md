@@ -29,7 +29,7 @@ Get the build for your system from the newest entry on the [releases page](../..
 | Windows 10/11 (x64) | `pocket-amp-tools-windows-x64.zip` | Unzip, run `pocket-amp-tools.exe`. If SmartScreen warns, choose *More info → Run anyway*. |
 | macOS 11+ | `pocket-amp-tools-macos.zip` | Unzip, then right-click *Pocket AMP Tools* → *Open* (the app is not signed). |
 | Linux (x64) | `Pocket_AMP_Tools-x86_64.AppImage` | `chmod +x` it and run it. Or use `pocket-amp-tools-linux-x64.tar.gz`. Needs GTK 3 and ALSA (`libasound2`). |
-| Android 8+ | not on the releases page | It goes to [F-Droid](https://f-droid.org), which builds and signs it from the release tag. Until it is listed there, build it yourself (see [Building](#building)). |
+| Android 8+ | `pocket-amp-tools-android.apk` | Open it on the phone and allow your browser or file manager to install apps. It is also on its way to [F-Droid](https://f-droid.org), which builds and signs it with its own key: Android will not update one copy over the other, and uninstalling to switch deletes the backups kept in the app, so save them elsewhere first. |
 
 Each release lists the SHA-256 of every file in `SHA256SUMS.txt`. Releases from v0.3.0 on also let you check that a file was built by this repository's CI: `gh attestation verify <file> --repo vitoramaral10/pocket-amp-tools`.
 
