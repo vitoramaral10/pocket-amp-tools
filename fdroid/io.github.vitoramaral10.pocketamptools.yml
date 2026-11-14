@@ -1,48 +1,112 @@
+AntiFeatures:
+  NonFreeNet:
+    en-US: The "Download from M-VAVE" button fetches the pedal firmware from M-VAVE's
+      server; the firmware is not free software.
+  Tracking:
+    en-US: Crash and update reports go to Sentry, only after the user agrees (off
+      by default).
 Categories:
   - Multimedia
 License: GPL-3.0-only
+AuthorName: vitoramaral10
+WebSite: https://vitoramaral10.github.io/pocket-amp-tools/
 SourceCode: https://github.com/vitoramaral10/pocket-amp-tools
 IssueTracker: https://github.com/vitoramaral10/pocket-amp-tools/issues
-Changelog: https://github.com/vitoramaral10/pocket-amp-tools/releases
-WebSite: https://vitoramaral10.github.io/pocket-amp-tools/
+Changelog: https://github.com/vitoramaral10/pocket-amp-tools/blob/HEAD/CHANGELOG.md
 
 AutoName: Pocket AMP Tools
 
 RepoType: git
 Repo: https://github.com/vitoramaral10/pocket-amp-tools.git
 
-AntiFeatures:
-  Tracking:
-    en-US: With the user's consent, crash and update reports go to Sentry.
-  NonFreeNet:
-    en-US: The "Download from M-VAVE" button fetches the pedal firmware
-      from M-VAVE's server; the firmware is not free software.
-
 Builds:
   - versionName: 0.3.0
-    versionCode: 3
-    commit: v0.3.0
-    output: build/app/outputs/flutter-apk/app-release.apk
+    versionCode: 1003
+    commit: 4d2a213b78d1dd76fd70e40a74c2e1fb210caa0a
+    output: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
     srclibs:
-      - flutter@3.47.9
+      - flutter@stable
     rm:
       - linux
       - macos
       - windows
+      - test
       - test_hardware
     prebuild:
+      - flutterVersion=$(sed -n -E "s/.*FLUTTER_VERSION:\ '(.*)'/\1/p" .github/workflows/build.yml)
+      - '[[ $flutterVersion ]]'
+      - git -C $$flutter$$ checkout -f $flutterVersion
       - export PUB_CACHE=$(pwd)/.pub-cache
       - $$flutter$$/bin/flutter config --no-analytics
-      - $$flutter$$/bin/flutter pub get
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
     scandelete:
       - .pub-cache
     build:
       - export PUB_CACHE=$(pwd)/.pub-cache
-      - $$flutter$$/bin/flutter build apk --release --dart-define=SENTRY_DSN=https://8c7abe2a014e101d473d76ca114ec196@o4511829580709888.ingest.us.sentry.io/4512418973548544
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform="android-arm"
+        --dart-define=SENTRY_DSN=https://8c7abe2a014e101d473d76ca114ec196@o4511829580709888.ingest.us.sentry.io/4512418973548544
+    ndk: r28c
+
+  - versionName: 0.3.0
+    versionCode: 2003
+    commit: 4d2a213b78d1dd76fd70e40a74c2e1fb210caa0a
+    output: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+    srclibs:
+      - flutter@stable
+    rm:
+      - linux
+      - macos
+      - windows
+      - test
+      - test_hardware
+    prebuild:
+      - flutterVersion=$(sed -n -E "s/.*FLUTTER_VERSION:\ '(.*)'/\1/p" .github/workflows/build.yml)
+      - '[[ $flutterVersion ]]'
+      - git -C $$flutter$$ checkout -f $flutterVersion
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+    scandelete:
+      - .pub-cache
+    build:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform="android-arm64"
+        --dart-define=SENTRY_DSN=https://8c7abe2a014e101d473d76ca114ec196@o4511829580709888.ingest.us.sentry.io/4512418973548544
+    ndk: r28c
+
+  - versionName: 0.3.0
+    versionCode: 4003
+    commit: 4d2a213b78d1dd76fd70e40a74c2e1fb210caa0a
+    output: build/app/outputs/flutter-apk/app-x86_64-release.apk
+    srclibs:
+      - flutter@stable
+    rm:
+      - linux
+      - macos
+      - windows
+      - test
+      - test_hardware
+    prebuild:
+      - flutterVersion=$(sed -n -E "s/.*FLUTTER_VERSION:\ '(.*)'/\1/p" .github/workflows/build.yml)
+      - '[[ $flutterVersion ]]'
+      - git -C $$flutter$$ checkout -f $flutterVersion
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter config --no-analytics
+      - $$flutter$$/bin/flutter pub get --enforce-lockfile
+    scandelete:
+      - .pub-cache
+    build:
+      - export PUB_CACHE=$(pwd)/.pub-cache
+      - $$flutter$$/bin/flutter build apk --release --split-per-abi --target-platform="android-x64"
+        --dart-define=SENTRY_DSN=https://8c7abe2a014e101d473d76ca114ec196@o4511829580709888.ingest.us.sentry.io/4512418973548544
     ndk: r28c
 
 AutoUpdateMode: Version
 UpdateCheckMode: Tags ^v[0-9.]+$
+VercodeOperation:
+  - '%c + 1000'
+  - '%c + 2000'
+  - '%c + 4000'
 UpdateCheckData: pubspec.yaml|version:\s.+\+(\d+)|.|version:\s(.+)\+
 CurrentVersion: 0.3.0
-CurrentVersionCode: 3
+CurrentVersionCode: 4003
