@@ -1,1 +1,1 @@
-Firmware updater and preset editor for the M-VAVE Pocket AMP, over USB-MIDI
+Preset editor and firmware updater for the Pocket AMP guitar pedal, any brand

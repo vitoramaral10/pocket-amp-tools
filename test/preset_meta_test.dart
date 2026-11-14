@@ -328,4 +328,18 @@ void main() {
     expect(find.textContaining('P05  Deluxe Clean'), findsOneWidget);
     expect(find.text('P02'), findsNothing);
   });
+
+  testWidgets('the discard and write buttons fit a phone', (
+    WidgetTester tester,
+  ) async {
+    final PresetWorkspace w = workspace();
+    w.load(w.draft!, 'pedal', fromPedal: true); // changes count against it
+    await show(tester, w, const Size(360, 780));
+    w.draft!.setVolume(0, 1);
+    w.edited();
+    await tester.pump();
+    // An overflow would have failed the test by now.
+    expect(find.text('Discard changes'), findsOneWidget);
+    expect(find.text('Write 1 preset to pedal'), findsOneWidget);
+  });
 }

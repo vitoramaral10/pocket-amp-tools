@@ -1,31 +1,45 @@
 name: Hardware test report
-description: Tell us it worked (or not) on your computer and pedal. Successful reports matter too!
+description: Tell us it worked (or not) on your computer or phone and your pedal. Successful reports matter too!
 title: "[Test] <system> - <result>"
 labels: [hardware-report]
 body:
   - type: markdown
     attributes:
       value: |
-        Every report helps decide when Windows and macOS can be called stable. Detection only (no update) is a useful report too.
+        Every report tells the next owner what works on which system and which brand of the pedal. Detection only (no update) is a useful report too.
   - type: dropdown
     id: os
     attributes:
       label: Operating system
-      options: [Windows, macOS, Linux]
+      options: [Windows, macOS, Linux, Android]
+    validations:
+      required: true
+  - type: input
+    id: pedal
+    attributes:
+      label: Brand and model printed on the pedal
+      placeholder: e.g. M-VAVE Pocket AMP, Donner Pocket AMP, Coolmusic PIXIE1, New Bee SK17
+    validations:
+      required: true
+  - type: dropdown
+    id: link
+    attributes:
+      label: Connection
+      options: [USB, Bluetooth]
     validations:
       required: true
   - type: input
     id: os_version
     attributes:
       label: System version and CPU
-      placeholder: e.g. macOS 15.1 on Apple M2, Windows 11 on x64
+      placeholder: e.g. macOS 15.1 on Apple M2, Windows 11 on x64, Android 15 on a Pixel 8
     validations:
       required: true
   - type: input
     id: app_version
     attributes:
       label: App version
-      placeholder: e.g. v0.2.0-beta.1
+      placeholder: e.g. v0.3.0
     validations:
       required: true
   - type: dropdown
@@ -34,6 +48,8 @@ body:
       label: What did you test?
       options:
         - Detection only (the app showed my pedal)
+        - Presets (read, edit, write)
+        - Sending an IR or an amp capture
         - Full firmware update
     validations:
       required: true
@@ -61,5 +77,5 @@ body:
     id: log
     attributes:
       label: App log (optional)
-      description: Details -> Copy for a bug report.
+      description: In the app, ⋮ -> Settings -> Copy for a bug report.
       render: text

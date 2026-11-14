@@ -77,15 +77,18 @@ class _OnboardingDialogState extends State<OnboardingDialog> {
       'Welcome to Pocket AMP Tools',
       <_Point>[
         (
-          Icons.system_update_alt,
-          'Update the firmware of an M-VAVE Pocket AMP, or a clone sold '
-              'under another brand',
+          Icons.tune,
+          'Edit the 80 presets of a Pocket AMP, whatever brand is printed '
+              'on it, and hear each change on the pedal',
         ),
         (
-          Icons.save_outlined,
-          'Back up its 80 presets. It is done for you before every update',
+          Icons.library_music_outlined,
+          'Send your own IRs and amp captures to its CAB and AMP slots',
         ),
-        (Icons.tune, 'Edit presets and cabinets on the computer'),
+        (
+          Icons.system_update_alt,
+          'Update its firmware. Your presets are backed up first',
+        ),
       ],
     ),
     (

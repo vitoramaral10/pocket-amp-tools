@@ -100,6 +100,60 @@ void main() {
     expect(find.text('Add WAV files…'), findsOneWidget);
   });
 
+  testWidgets('on a phone the library sends a file from its menu', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final Directory tmp = Directory.systemTemp.createTempSync('library_ui_');
+    addTearDown(() => tmp.deleteSync(recursive: true));
+    final Library lib = Library(Directory('${tmp.path}/Library'));
+    await tester.runAsync(
+      () => lib.import(
+        LibraryKind.amp,
+        'A Capture With A Long Name.nam',
+        File('test/fixtures/a2_lite_synthetic.nam').readAsBytesSync(),
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: HomePage(
+          backend: FakePedal(image: Uint8List(1024), bank: demoBank()),
+          libraryRoot: lib.root,
+        ),
+      ),
+    );
+    Future<void> settle([int n = 40]) async {
+      for (int i = 0; i < n; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 5)),
+        );
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+    }
+
+    await settle(400); // detection, then the presets read it starts
+    await tester.tap(find.text('Library'));
+    await settle();
+    // The button would leave the name a few letters: it is in the menu.
+    expect(find.text('Send to pedal…'), findsNothing);
+    final double name = tester
+        .getSize(find.text('A Capture With A Long Name'))
+        .width;
+    expect(name, greaterThan(150));
+    await tester.tap(
+      find.descendant(
+        of: find.widgetWithText(ListTile, 'A Capture With A Long Name'),
+        matching: find.byTooltip('More'),
+      ),
+    );
+    await settle(5);
+    await tester.tap(find.text('Send to pedal…'));
+    await settle(5);
+    expect(find.textContaining('20.  '), findsOneWidget);
+  });
+
   testWidgets('edits a preset and writes only that one to the pedal', (
     WidgetTester tester,
   ) async {

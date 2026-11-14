@@ -1,17 +1,19 @@
-Update the firmware of the <b>M-VAVE Pocket AMP</b> guitar pedal and edit its presets from your phone, over Bluetooth or a USB OTG cable. Clones sold under other names, such as the Coolmusic PIXIE1, are supported too.
+Edit the presets and update the firmware of the <b>Pocket AMP</b> guitar pedal from your phone, over Bluetooth or a USB OTG cable. The same pedal is sold as the <b>M-VAVE Pocket AMP</b>, the <b>Donner Pocket AMP</b>, the <b>Coolmusic PIXIE1</b> and the <b>New Bee SK17</b>: the app is for all of them, whatever brand is printed on yours.
 
 <b>What it does</b>
 <ul>
+<li>Edits the 80 presets: volume, signal chain, each block's model and knobs, and the EQ. Every change is heard live on the pedal.</li>
+<li>Gives each preset a name, labels and a rating, and filters the list by them.</li>
+<li>Sends your own cabinet IRs (WAV) to the 20 CAB slots and amp captures (A2 .nam files) to the 20 AMP slots.</li>
+<li>Backs up and restores presets as plain JSON files.</li>
 <li>Updates the pedal with M-VAVE's official firmware file, after a backup of your presets.</li>
-<li>Backs up, edits and restores presets; edits are heard live on the pedal.</li>
-<li>Uploads your own cabinet IRs (WAV) to the 20 CAB slots.</li>
-<li>Optional assistant: describe a sound and an AI service you choose (any OpenAI-compatible address, your own key) suggests a preset.</li>
+<li>Optional assistant: describe a sound and an AI service you choose (any OpenAI-compatible address, your own key) edits the preset.</li>
 </ul>
 
 <b>Network</b>
-The app only goes online when you ask it to: <i>Download official firmware</i> fetches the file from M-VAVE's server, and the assistant talks to the address you configure. Nothing else is sent.
+The app goes online only for what you ask or allow: <i>Download from M-VAVE</i> fetches the firmware file from M-VAVE's server, the assistant talks to the address you configure, and error reports go to Sentry only if you agree when the app asks (off by default).
 
 <b>Limits on Android</b>
-Over Bluetooth (pair the pedal once from the app menu) you can read, edit and write presets and upload IRs; firmware updates need the USB cable. The pedal firmware is M-VAVE's and is not free software.
+Over Bluetooth (pair the pedal once with <i>Pair over Bluetooth</i>) you can read, edit and write presets and send IRs and captures; firmware updates need the USB cable. The pedal firmware is M-VAVE's and is not free software.
 
-This project is not affiliated with M-VAVE.
+This project is not affiliated with M-VAVE or any other brand of the pedal.
