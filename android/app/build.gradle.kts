@@ -31,7 +31,8 @@ android {
     }
 
     // The release APK is left unsigned: F-Droid builds it from source and
-    // signs it with its own key.
+    // signs it with its own key. The copy on the releases page is signed in
+    // CI (.github/workflows/build.yml).
 
     // F-Droid rejects the dependency list Gradle embeds encrypted for Google.
     dependenciesInfo {
