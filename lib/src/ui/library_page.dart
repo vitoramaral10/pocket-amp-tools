@@ -155,14 +155,16 @@ class LibraryPage extends StatelessWidget {
 
   Widget _filesPanel(BuildContext context, ThemeData theme, bool amp) {
     final List<LibraryItem>? list = items;
+    // On a phone the button would leave the file name a few letters.
+    final bool compact = MediaQuery.sizeOf(context).width < 600;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         _heading(
           theme,
           list == null || list.isEmpty
-              ? 'On this computer'
-              : 'On this computer (${list.length})',
+              ? 'Your files'
+              : 'Your files (${list.length})',
           FilledButton.tonalIcon(
             onPressed: busy ? null : onImport,
             icon: const Icon(Icons.add),
@@ -199,18 +201,25 @@ class LibraryPage extends StatelessWidget {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        TextButton(
-                          onPressed: _canSend && names != null
-                              ? () => onSendItem(it)
-                              : null,
-                          child: const Text('Send to pedal…'),
-                        ),
+                        if (!compact)
+                          TextButton(
+                            onPressed: _canSend && names != null
+                                ? () => onSendItem(it)
+                                : null,
+                            child: const Text('Send to pedal…'),
+                          ),
                         PopupMenuButton<void Function()>(
                           tooltip: 'More',
                           enabled: !busy,
                           onSelected: (void Function() f) => f(),
                           itemBuilder: (BuildContext context) =>
                               <PopupMenuEntry<void Function()>>[
+                                if (compact)
+                                  PopupMenuItem<void Function()>(
+                                    enabled: _canSend && names != null,
+                                    value: () => onSendItem(it),
+                                    child: const Text('Send to pedal…'),
+                                  ),
                                 PopupMenuItem<void Function()>(
                                   value: () => onRename(it),
                                   child: const Text('Rename…'),
@@ -245,6 +254,7 @@ class LibraryPage extends StatelessWidget {
   Widget _slotsPanel(BuildContext context, ThemeData theme, bool amp) {
     final List<String>? n = names;
     final String block = amp ? 'AMP' : 'CAB';
+    final bool canLoad = _canSend && (items?.isNotEmpty ?? false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -289,12 +299,17 @@ class LibraryPage extends StatelessWidget {
                     subtitle: links[i] == null
                         ? null
                         : Text('From your library: ${links[i]}'),
-                    trailing: TextButton(
-                      onPressed: _canSend && (items?.isNotEmpty ?? false)
-                          ? () => onLoadSlot(i)
-                          : null,
-                      child: const Text('Load from library…'),
-                    ),
+                    // The label would take most of a phone's row.
+                    trailing: MediaQuery.sizeOf(context).width < 600
+                        ? IconButton(
+                            tooltip: 'Load from library…',
+                            onPressed: canLoad ? () => onLoadSlot(i) : null,
+                            icon: const Icon(Icons.upload_file_outlined),
+                          )
+                        : TextButton(
+                            onPressed: canLoad ? () => onLoadSlot(i) : null,
+                            child: const Text('Load from library…'),
+                          ),
                   ),
                 ],
               ],

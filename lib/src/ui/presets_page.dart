@@ -606,21 +606,30 @@ class _Toolbar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(24, 8, 16, 8),
       child: Row(
         children: <Widget>[
-          Expanded(
-            child: Text(
-              page.task ?? '',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+          if (page.task != null)
+            Expanded(
+              child: Text(
+                page.task!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
             ),
-          ),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: _actions(page),
+          // Bounded, so the buttons wrap on a phone instead of overflowing.
+          Expanded(
+            flex: 3,
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: _actions(page),
+              ),
+            ),
           ),
         ],
       ),
