@@ -5,10 +5,12 @@ Run after `flutter test test_screens --update-goldens`:
 
     python3 test_screens/compose.py
 
-Writes docs/screenshot-dark.png, docs/screenshot-light.png,
-docs/social-preview.png and docs/icon.png. Needs rsvg-convert and the Noto Sans font.
+Writes docs/screenshot-{dark,light}.png, docs/screenshot-phone-{dark,light}.png,
+docs/social-preview.png and docs/icon.png, and copies the phone renders to the
+store listing in fastlane/. Needs rsvg-convert and the Noto Sans font.
 """
 import base64
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,16 +18,17 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 GOLD = ROOT / "test_screens" / "goldens"
 DOCS = ROOT / "docs"
+STORE = ROOT / "fastlane/metadata/android/en-US/images/phoneScreenshots"
 ICON = ROOT / "assets" / "icon" / "app_icon.png"
 
 SHOT_W, SHOT_H = 2560, 1600  # the presets editor at 1280x800, 2x
 BAR = 72  # title bar height at 2x
 
 THEMES = {
-    "dark": dict(page="#120c0b", glow="#b4531f", app="#1a1110",
-                 bar="#2a201e", title="#f1dfda", line="#3a2e2b"),
-    "light": dict(page="#f3e6e1", glow="#e8a07a", app="#fff8f6",
-                  bar="#efe2dd", title="#3b2a25", line="#dccbc5"),
+    "dark": dict(page="#0e0e0e", glow="#c4511a", app="#1a1a1a",
+                 bar="#2b2b2b", title="#ededed", line="#333333"),
+    "light": dict(page="#f2efed", glow="#ff8a50", app="#ffffff",
+                  bar="#ebebeb", title="#1c1c1c", line="#dddddd"),
 }
 
 
@@ -92,6 +95,28 @@ def screenshot(name):
     render(svg, DOCS / f"screenshot-{name}.png", W)
 
 
+def phone(name):
+    """The phone render with rounded corners, at a third of its size."""
+    t = THEMES[name]
+    W, H, r = 1080, 2340, 84
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}">
+  <clipPath id="c"><rect width="{W}" height="{H}" rx="{r}"/></clipPath>
+  <image href="{uri(GOLD / f"layout-phone-presets-{name}.png")}" width="{W}"
+         height="{H}" clip-path="url(#c)"/>
+  <rect x="3" y="3" width="{W - 6}" height="{H - 6}" rx="{r - 3}" fill="none"
+        stroke="{t['line']}" stroke-width="6"/>
+</svg>"""
+    render(svg, DOCS / f"screenshot-phone-{name}.png", 720)
+
+
+def store():
+    """The store listing shows them in file name order."""
+    STORE.mkdir(parents=True, exist_ok=True)
+    for i, screen in enumerate(("presets", "library", "backups"), 1):
+        shutil.copyfile(GOLD / f"layout-phone-{screen}-dark.png",
+                        STORE / f"{i}.png")
+
+
 def social():
     t = THEMES["dark"]
     W, H = 1280, 640
@@ -107,24 +132,26 @@ def social():
   {window(t, GOLD / "layout-presets-dark.png", 700, 120, s)}
   <rect x="700" y="0" width="{W - 640}" height="{H}" fill="url(#fade)"/>
   <image href="{uri(ICON)}" x="64" y="88" width="88" height="88"/>
-  <text font-family="Noto Sans" fill="#f1dfda">
+  <text font-family="Noto Sans" fill="#ededed">
     <tspan x="64" y="268" font-size="54" font-weight="700">Edit and update</tspan>
     <tspan x="64" y="336" font-size="54" font-weight="700">your Pocket AMP</tspan>
   </text>
-  <text x="64" y="398" font-family="Noto Sans" font-size="27" fill="#d8c2bb">presets, IRs and firmware</text>
-  <text x="64" y="440" font-family="Noto Sans" font-size="27" fill="#d8c2bb">from macOS, Linux or Windows</text>
-  <rect x="64" y="496" width="404" height="52" rx="26" fill="none" stroke="#ffb59a" stroke-width="2"/>
-  <text x="266" y="530" text-anchor="middle" font-family="Noto Sans" font-weight="600" font-size="21" fill="#ffb59a">Free &amp; open source · GPL-3.0</text>
+  <text x="64" y="398" font-family="Noto Sans" font-size="27" fill="#bdbdbd">M-VAVE, Donner, PIXIE1, SK17: any brand</text>
+  <text x="64" y="440" font-family="Noto Sans" font-size="27" fill="#bdbdbd">macOS, Linux, Windows and Android</text>
+  <rect x="64" y="496" width="404" height="52" rx="26" fill="none" stroke="#ff8a50" stroke-width="2"/>
+  <text x="266" y="530" text-anchor="middle" font-family="Noto Sans" font-weight="600" font-size="21" fill="#ff8a50">Free &amp; open source · GPL-3.0</text>
 </svg>"""
     render(svg, DOCS / "social-preview.png", W)
 
 
 if __name__ == "__main__":
     for n in ("dark", "light"):
-        if not (GOLD / f"layout-presets-{n}.png").exists():
-            sys.exit(f"missing goldens/layout-presets-{n}.png: render them first")
-    screenshot("dark")
-    screenshot("light")
+        for shot in ("presets", "phone-presets"):
+            if not (GOLD / f"layout-{shot}-{n}.png").exists():
+                sys.exit(f"missing goldens/layout-{shot}-{n}.png: render them first")
+        screenshot(n)
+        phone(n)
+    store()
     social()
     render(f'<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">'
            f'<image href="{uri(ICON)}" width="1024" height="1024"/></svg>',
