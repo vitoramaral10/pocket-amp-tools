@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>M-VAVE Pocket AMP firmware update for Mac, Linux and Windows · Pocket AMP Tools</title>
-<meta name="description" content="Free, open source app that updates the M-VAVE Pocket AMP guitar pedal to firmware V1.05 over USB from macOS, Linux or Windows. Backs up and restores your 80 presets. Also works with Pocket AMP clones such as the Coolmusic PIXIE1 and New Bee SK17.">
+<title>Pocket AMP editor and firmware update: M-VAVE, Donner, PIXIE1, SK17 · Pocket AMP Tools</title>
+<meta name="description" content="Free, open source app for the Pocket AMP guitar pedal, whatever brand is on it: M-VAVE, Donner, Coolmusic PIXIE1 or New Bee SK17. Edit presets live, load your own IRs and NAM captures, back up, and update the firmware to V1.05 from macOS, Linux, Windows or Android.">
 <link rel="canonical" href="https://vitoramaral10.github.io/pocket-amp-tools/">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Update the M-VAVE Pocket AMP firmware from Mac, Linux or Windows">
-<meta property="og:description" content="Free, open source updater for the Pocket AMP. Installs the official V1.05 firmware over USB and keeps your presets.">
+<meta property="og:title" content="Edit and update your Pocket AMP, whatever brand is on it">
+<meta property="og:description" content="Free, open source preset editor and firmware updater for the M-VAVE and Donner Pocket AMP, the Coolmusic PIXIE1 and the New Bee SK17. macOS, Linux, Windows and Android.">
 <meta property="og:url" content="https://vitoramaral10.github.io/pocket-amp-tools/">
 <meta property="og:image" content="https://vitoramaral10.github.io/pocket-amp-tools/social-preview.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -22,11 +22,16 @@
     {
       "@type": "SoftwareApplication",
       "name": "Pocket AMP Tools",
-      "description": "Updates the firmware of the M-VAVE Pocket AMP guitar pedal and its clones over USB-MIDI, with automatic preset backup and restore.",
-      "applicationCategory": "UtilitiesApplication",
-      "operatingSystem": "Windows 10, Windows 11, macOS 11+, Linux",
+      "description": "Preset editor, IR and amp capture library, backups and firmware updater for the Pocket AMP guitar pedal, sold as the M-VAVE Pocket AMP, Donner Pocket AMP, Coolmusic PIXIE1 and New Bee SK17.",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "Windows 10, Windows 11, macOS 11+, Linux, Android 8+",
+      "softwareVersion": "0.3.0",
       "license": "https://www.gnu.org/licenses/gpl-3.0.html",
-      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
       "downloadUrl": "https://github.com/vitoramaral10/pocket-amp-tools/releases",
       "codeRepository": "https://github.com/vitoramaral10/pocket-amp-tools",
       "screenshot": "https://vitoramaral10.github.io/pocket-amp-tools/screenshot-light.png"
@@ -34,18 +39,78 @@
     {
       "@type": "FAQPage",
       "mainEntity": [
-        { "@type": "Question", "name": "How do I update the Pocket AMP firmware on a Mac?",
-          "acceptedAnswer": { "@type": "Answer", "text": "M-VAVE's updater runs only on Windows. Pocket AMP Tools runs on macOS 11 or newer: connect the pedal with a USB data cable, open the app, click Download from M-VAVE, then Update firmware. It takes about two minutes." } },
-        { "@type": "Question", "name": "Will the update erase my presets?",
-          "acceptedAnswer": { "@type": "Answer", "text": "A firmware update can overwrite some presets and their EQ. The app backs up all 80 presets and their EQ before updating and restores only what changed afterwards." } },
-        { "@type": "Question", "name": "Do I need a driver?",
-          "acceptedAnswer": { "@type": "Answer", "text": "No. The pedal is a standard USB-MIDI device, and the app uses the MIDI support built into Windows, macOS and Linux." } },
-        { "@type": "Question", "name": "Does it work with Pocket AMP clones like the Coolmusic PIXIE1 or New Bee SK17?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Yes, for clones confirmed to be a Pocket AMP. The PIXIE1 and the SK17 are: owners updated them to V1.05. The app asks for a separate confirmation, and presets from older clone firmware are not restored (the app keeps a raw copy and asks before continuing). Clones not yet listed can be reported on GitHub." } },
-        { "@type": "Question", "name": "What if the update stops halfway?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Reconnect the pedal and click Detect pedal. A pedal left in update mode is shown as such, and Resume update writes the firmware again." } },
-        { "@type": "Question", "name": "Is this an official M-VAVE app?",
-          "acceptedAnswer": { "@type": "Answer", "text": "No. It is a free community tool under the GPL-3.0 license. It installs the official firmware file published by M-VAVE and does not ship the firmware itself." } }
+        {
+          "@type": "Question",
+          "name": "Does it work with my Donner Pocket AMP, Coolmusic PIXIE1 or New Bee SK17?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. They are the same pedal as the M-VAVE Pocket AMP under another name, and owners of each one have updated theirs to firmware V1.05 with this app. Editing presets, backups and the library work the same on all of them. A firmware update needs a separate confirmation, because afterwards the pedal reports itself as a Pocket AMP."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "My pedal has another brand on it. Will it work?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Probably, if it is a Pocket AMP inside. A pedal whose name is not on the list but keeps its presets like a Pocket AMP is detected as presets only: editing, backups and the library work, and firmware updates stay blocked until an owner confirms the name. Other pedals are refused, because a different pedal that speaks the same protocol would be bricked by this firmware."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I update the Pocket AMP firmware on a Mac or on Linux?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "M-VAVE's updater runs only on Windows. Pocket AMP Tools runs on macOS 11 or newer, Linux, Windows and Android: connect the pedal with a USB data cable, open the Firmware section, click Download from M-VAVE, then Update firmware. It takes about two minutes."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Will the update erase my presets?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A firmware update can overwrite some presets and their EQ. The app backs up all 80 presets and their EQ before updating and restores only what changed afterwards."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I load my own IRs and NAM amp captures?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The Library section sends a WAV impulse response (44.1 kHz, mono, 24-bit, 2048 samples) to any of the 20 CAB slots and an A2 .nam capture from TONE3000 to any of the 20 AMP slots, and remembers which file went to which slot."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it work on Android or over Bluetooth?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. On Android 8 or newer and on Linux the app reaches the pedal over Bluetooth to read, edit and write presets. Firmware updates always need the USB cable. Windows and macOS use USB only."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do I need a driver?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. The pedal is a standard USB-MIDI device, and the app uses the MIDI support built into Windows, macOS, Linux and Android."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What if the update stops halfway?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Reconnect the pedal and click Detect pedal. A pedal left in update mode is shown as such, and Resume update writes the firmware again."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is this an official app?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. It is a free community tool under the GPL-3.0 license, not affiliated with M-VAVE, Donner, Coolmusic or New Bee. It installs the official firmware file published by M-VAVE and does not ship the firmware itself."
+          }
+        }
       ]
     }
   ]
@@ -106,6 +171,13 @@ h1 { font-size: clamp(32px, 5vw, 52px); line-height: 1.1; letter-spacing: -.02em
 .btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
 .note { font-size: 14px; color: var(--content-muted); margin: 16px 0 0; }
 .shot { display: block; width: 100%; max-width: 480px; height: auto; }
+.phone { display: block; width: 100%; max-width: 260px; height: auto; margin: 0 auto; }
+.brands { font-size: 15px; color: var(--content-muted); margin: 24px 0 0; }
+.brands strong { color: var(--content); font-weight: 600; }
+h3 { font-size: 18px; line-height: 1.3; font-weight: 600; margin: 0 0 4px; }
+.features { list-style: none; padding: 0; }
+.features li + li { margin-top: 20px; }
+.features p { margin: 0; color: var(--content-muted); }
 section { padding: 48px 0; border-top: 1px solid var(--border); }
 h2 { font-size: 28px; line-height: 1.2; letter-spacing: -.01em; font-weight: 600; margin: 0 0 24px; }
 .grid { display: grid; gap: 48px; align-items: start; }
@@ -128,29 +200,70 @@ code { font-size: .92em; background: var(--surface); padding: 1px 5px; border-ra
   <header class="wrap">
     <div class="grid">
       <div>
-        <p class="eyebrow">M-VAVE Pocket AMP and clones · free and open source</p>
-        <h1>Update your Pocket AMP firmware from Mac, Linux or Windows</h1>
-        <p class="lead prose">Pocket AMP Tools installs M-VAVE's official firmware (currently V1.05) over plain USB, without drivers. It backs up all 80 presets first and puts back the ones the update changed.</p>
+        <p class="eyebrow">For every Pocket AMP · free and open source</p>
+        <h1>Edit and update your Pocket AMP, whatever brand is on it</h1>
+        <p class="lead prose">Pocket AMP Tools edits the 80 presets live on the pedal, loads your own IRs and amp captures, keeps backups and installs the official firmware (currently V1.05) over plain USB, without drivers.</p>
         <div class="actions">
           <a class="btn btn-primary" href="https://github.com/vitoramaral10/pocket-amp-tools/releases">Download</a>
           <a class="btn btn-secondary" href="https://github.com/vitoramaral10/pocket-amp-tools">Source on GitHub</a>
         </div>
-        <p class="note">Windows 10/11 · macOS 11+ · Linux x64 (AppImage). Community tool, not affiliated with M-VAVE.</p>
+        <p class="note">Windows 10/11 · macOS 11+ · Linux x64 (AppImage) · Android 8+ (on its way to F-Droid). Community tool, not affiliated with any brand of the pedal.</p>
+        <p class="brands">Sold as the <strong>M-VAVE Pocket AMP</strong>, the <strong>Donner Pocket AMP</strong>, the <strong>Coolmusic PIXIE1</strong> and the <strong>New Bee SK17</strong>: one pedal, one app.</p>
       </div>
       <picture>
         <source srcset="screenshot-dark.png" media="(prefers-color-scheme: dark)">
-        <img class="shot" src="screenshot-light.png" width="2752" height="1864" alt="Pocket AMP Tools window: the preset editor with the 80 presets, the signal chain, and each block's model and knobs, played live on the pedal">
+        <img class="shot" src="screenshot-light.png" width="2752" height="1864" alt="Pocket AMP Tools window: the preset editor with the 80 presets, the signal chain, and the open block's model and knobs, played live on the pedal">
       </picture>
     </div>
   </header>
 
   <section class="wrap">
-    <h2>How to update the Pocket AMP</h2>
+    <h2>What it does</h2>
+    <div class="grid">
+      <ul class="features prose">
+        <li><h3>Preset editor, heard live</h3>
+          <p>Volume, signal chain, every block's model and knobs, and the EQ. Each change plays on the pedal as you make it, and nothing is stored until you write it.</p></li>
+        <li><h3>Your own IRs and amp captures</h3>
+          <p>The library sends WAV impulse responses to the 20 CAB slots and A2 <code>.nam</code> captures to the 20 AMP slots, and remembers which file is where.</p></li>
+        <li><h3>Names, ratings and filters</h3>
+          <p>Give each preset a name, a description, labels and stars, then filter the list. Keyboard shortcuts cover the whole editor.</p></li>
+        <li><h3>Backups you can read</h3>
+          <p>A backup is a plain JSON file with every knob by name. One is taken before each firmware update.</p></li>
+        <li><h3>Firmware update with a safety net</h3>
+          <p>The official file from M-VAVE, checked before it is sent, with your presets backed up first and restored after.</p></li>
+        <li><h3>On your phone, over Bluetooth</h3>
+          <p>On Android and Linux the editor also works over Bluetooth. Firmware updates need the cable.</p></li>
+        <li><h3>An assistant, if you want one</h3>
+          <p>Describe a sound and an AI service you choose, with your own key, edits the preset for you. Off until you set it up.</p></li>
+      </ul>
+      <picture>
+        <source srcset="screenshot-phone-dark.png" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="screenshot-phone-light.png" width="720" height="1560" loading="lazy" alt="Pocket AMP Tools on a phone: a preset with its name and rating, the signal chain and the knobs of the AMP block">
+      </picture>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2>Which pedals</h2>
+    <table class="prose">
+      <thead><tr><th scope="col">Sold as</th><th scope="col">Status</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">M-VAVE Pocket AMP</th><td>The pedal the app was built on.</td></tr>
+        <tr><th scope="row">Donner Pocket AMP</th><td>Updated to V1.05 by an owner, presets kept.</td></tr>
+        <tr><th scope="row">Coolmusic PIXIE1</th><td>Updated to V1.05 by an owner.</td></tr>
+        <tr><th scope="row">New Bee SK17</th><td>Updated to V1.05 by an owner.</td></tr>
+        <tr><th scope="row">Another name</th><td>Presets, backups and library if it keeps its presets like a Pocket AMP; firmware updates once an owner <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">reports it</a>.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="wrap">
+    <h2>How to update the firmware</h2>
     <ol class="prose">
       <li>Charge the pedal, connect it with a USB <strong>data</strong> cable and turn it on.</li>
       <li>Close the M-VAVE app and anything else that uses MIDI.</li>
       <li>Open Pocket AMP Tools. It detects the pedal and shows the installed version.</li>
-      <li>Click <strong>Download from M-VAVE</strong>, or open a <code>.fwsc</code> file you already have.</li>
+      <li>In the <strong>Firmware</strong> section, click <strong>Download from M-VAVE</strong>, or open a <code>.fwsc</code> file you already have.</li>
       <li>Click <strong>Update firmware</strong> and wait about two minutes. The pedal restarts twice.</li>
       <li>Click <strong>Restore my presets from before the update</strong>.</li>
     </ol>
@@ -158,11 +271,11 @@ code { font-size: .92em; background: var(--surface); padding: 1px 5px; border-ra
   </section>
 
   <section class="wrap">
-    <h2>Why use it</h2>
+    <h2>Why use it to update</h2>
     <table class="prose">
       <thead><tr><th scope="col"></th><th scope="col">M-VAVE updater</th><th scope="col">Pocket AMP Tools</th></tr></thead>
       <tbody>
-        <tr><th scope="row">Systems</th><td>Windows only</td><td>Windows, macOS, Linux</td></tr>
+        <tr><th scope="row">Systems</th><td>Windows only</td><td>Windows, macOS, Linux, Android</td></tr>
         <tr><th scope="row">Firmware</th><td>Bundled file, older than the downloads page at the time of writing</td><td>Current official file from M-VAVE's server</td></tr>
       </tbody>
     </table>
@@ -171,23 +284,29 @@ code { font-size: .92em; background: var(--surface); padding: 1px 5px; border-ra
   <section class="wrap">
     <h2>Questions</h2>
     <div class="prose">
-      <details><summary>How do I update the Pocket AMP firmware on a Mac?</summary>
-        <p>M-VAVE's updater runs only on Windows. This app runs on macOS 11 or newer: connect the pedal, open the app, click <strong>Download from M-VAVE</strong>, then <strong>Update firmware</strong>. The app is not signed, so the first time right-click it and choose <strong>Open</strong>.</p></details>
+      <details><summary>Does it work with my Donner Pocket AMP, Coolmusic PIXIE1 or New Bee SK17?</summary>
+        <p>Yes. They are the same pedal as the M-VAVE Pocket AMP under another name, and owners of each one have updated theirs to firmware V1.05 with this app. Editing presets, backups and the library work the same on all of them. A firmware update asks for a separate confirmation, because afterwards the pedal reports itself as a Pocket AMP and there may be no firmware of the original brand to go back to.</p></details>
+      <details><summary>My pedal has another brand on it. Will it work?</summary>
+        <p>Probably, if it is a Pocket AMP inside. A pedal whose name is not on the list but keeps its presets like a Pocket AMP is detected as <em>presets only</em>: editing, backups and the library work, and firmware updates stay blocked until an owner confirms the name. A different pedal that speaks the same protocol would be bricked by this firmware, so it is refused. <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">Report yours on GitHub</a> to get it listed.</p></details>
+      <details><summary>How do I update the Pocket AMP firmware on a Mac or on Linux?</summary>
+        <p>M-VAVE's updater runs only on Windows. This app runs on macOS 11 or newer, Linux, Windows and Android: connect the pedal with a USB data cable, open the <strong>Firmware</strong> section, click <strong>Download from M-VAVE</strong>, then <strong>Update firmware</strong>. On a Mac the app is not signed, so the first time right-click it and choose <strong>Open</strong>.</p></details>
       <details><summary>Will the update erase my presets?</summary>
         <p>A firmware update can overwrite some presets and their EQ. The app backs up all 80 presets and their EQ before updating, and restores only what changed. You can also save a backup to a file at any time.</p></details>
+      <details><summary>Can I load my own IRs and NAM amp captures?</summary>
+        <p>Yes. The <strong>Library</strong> section sends a WAV impulse response (44.1 kHz, mono, 24-bit, 2048 samples) to any of the 20 CAB slots, and an A2 <code>.nam</code> capture from TONE3000 to any of the 20 AMP slots. The pedal cannot give a file back, so the app remembers which one went to which slot.</p></details>
+      <details><summary>Does it work on Android or over Bluetooth?</summary>
+        <p>Yes. On Android 8 or newer and on Linux the app reaches the pedal over Bluetooth to read, edit and write presets. Firmware updates always need the USB cable (an OTG cable on a phone). Windows and macOS use USB only.</p></details>
       <details><summary>Do I need a driver?</summary>
         <p>No. The pedal is a standard USB-MIDI device. Use a data cable: many USB cables only charge.</p></details>
-      <details><summary>Does it work with Pocket AMP clones like the Coolmusic PIXIE1 or New Bee SK17?</summary>
-        <p>Yes, for clones confirmed to be a Pocket AMP. The Coolmusic PIXIE1, the New Bee SK17 and the Donner Pocket AMP are: owners updated them to V1.05. The app asks for a separate confirmation, the pedal then reports itself as a Pocket AMP, and presets from older clone firmware are not restored: the app keeps a raw copy and asks before continuing. Other pedals are refused, because a different pedal that speaks the same protocol would be bricked. Have a clone that is not listed? <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">Report it on GitHub</a>.</p></details>
       <details><summary>What if the update stops halfway?</summary>
         <p>Don't unplug in a hurry. Reconnect the pedal and click <strong>Detect pedal</strong>. A pedal left in update mode is shown as such, and <strong>Resume update</strong> writes the firmware again.</p></details>
-      <details><summary>Is this an official M-VAVE app?</summary>
-        <p>No. It is a free community tool under GPL-3.0. It installs the official firmware file from M-VAVE and does not ship the firmware itself. Use it at your own risk.</p></details>
+      <details><summary>Is this an official app?</summary>
+        <p>No. It is a free community tool under GPL-3.0, not affiliated with M-VAVE, Donner, Coolmusic or New Bee. It installs the official firmware file from M-VAVE and does not ship the firmware itself. Use it at your own risk.</p></details>
     </div>
   </section>
 </main>
 <footer class="wrap">
-  <p class="prose">Pocket AMP Tools is open source (GPL-3.0). Found a problem or tested it on your pedal? <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">Tell us on GitHub</a>. <a href="https://github.com/vitoramaral10/pocket-amp-tools#thanks">Thanks</a> to the owners who tested it on their clones. M-VAVE, Pocket AMP, PIXIE1, New Bee SK17 and Donner are trademarks of their owners.</p>
+  <p class="prose">Pocket AMP Tools is open source (GPL-3.0). Found a problem or tested it on your pedal? <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">Tell us on GitHub</a>. <a href="https://github.com/vitoramaral10/pocket-amp-tools#thanks">Thanks</a> to the owners who tested it on their own pedals. M-VAVE, Pocket AMP, Donner, Coolmusic PIXIE1 and New Bee SK17 are trademarks of their owners.</p>
 </footer>
 </body>
 </html>

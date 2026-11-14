@@ -15,7 +15,7 @@ AntiFeatures:
   Tracking:
     en-US: With the user's consent, crash and update reports go to Sentry.
   NonFreeNet:
-    en-US: The "Download official firmware" button fetches the pedal firmware
+    en-US: The "Download from M-VAVE" button fetches the pedal firmware
       from M-VAVE's server; the firmware is not free software.
 
 Builds:
