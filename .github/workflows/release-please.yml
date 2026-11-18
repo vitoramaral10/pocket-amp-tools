@@ -1,0 +1,40 @@
+name: release-please
+
+# Keeps one release pull request open on main, with the next version and the
+# CHANGELOG built from the commits (feat:, fix:). Merging it creates the tag
+# vX.Y.Z and the GitHub release, then starts the release builds.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        id: rp
+
+      # Events made with the default GITHUB_TOKEN do not start other workflows,
+      # except workflow_dispatch. So the tag and the release PR both reach
+      # build.yml through a dispatch.
+      - name: Build and publish the release
+        if: steps.rp.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.rp.outputs.tag_name }}
+        # Run from the tag, so the release job of build.yml sees a tag ref.
+        run: gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"
+
+      # The required check is `test`. A PR opened with GITHUB_TOKEN gets no
+      # pull_request run, so run the tests on its branch (without the builds).
+      - name: Run the tests on the release PR
+        if: steps.rp.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ fromJSON(steps.rp.outputs.pr).headBranchName }}
+        run: gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" -f build=false

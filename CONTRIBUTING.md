@@ -52,7 +52,11 @@ Project layout:
 
 - `main` is the only long-lived branch. Open pull requests against it from a short branch named `feature/...`, `bugfix/...` or `docs/...`.
 - A pull request runs `flutter analyze` and `flutter test`. The release builds do not run on a merge.
-- A release is a pull request that bumps the version in `pubspec.yaml` and dates the [CHANGELOG](CHANGELOG.md), followed by a tag `vX.Y.Z` on the merge commit. The tag builds Linux, Windows, macOS and Android, and publishes the GitHub release with checksums. A tag with a `-` in it (`v0.5.0-beta.1`) is published as a pre-release.
+- Releases are made by [release-please](https://github.com/googleapis/release-please). After each merge to `main` it keeps one release pull request open ("chore(main): release X.Y.Z"), with the new version in `pubspec.yaml` (the `+N` build number goes up by one) and the notes in [CHANGELOG](CHANGELOG.md), built from the `feat:` and `fix:` commits since the last release. `chore:`, `docs:` and `ci:` commits do not open or change it. The PR waits until you decide to release.
+- To release, merge that PR. The tag `vX.Y.Z` and the GitHub release are created, and the same workflow then builds Linux, Windows, macOS and Android and attaches the files with checksums. The F-Droid recipe points at that tag.
+- Before merging, add `fastlane/metadata/android/en-US/changelogs/N.txt` for the new `+N` build number, and edit the CHANGELOG text if you want it friendlier for users.
+- `feat:` raises the minor version, `fix:` the patch, and `feat!:` or a `BREAKING CHANGE:` footer the major (the minor while the version is 0.x). A pre-release (`v0.5.0-beta.1`) is still cut by hand: push the tag, and it is published as a pre-release.
+- Merge pull requests with **squash** and write the PR title as the commit message (`fix: ...`), because release-please reads the merged commit, not the branch's commits.
 - To try the builds before a release, run the `build` workflow by hand from the Actions tab.
 
 ## Pull requests

@@ -7,6 +7,11 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      build:
+        description: Build all platforms (off runs only the tests)
+        type: boolean
+        default: true
 
 # A new push to a pull request cancels the run it makes obsolete.
 concurrency:
@@ -36,7 +41,7 @@ jobs:
   build:
     needs: test
     # PRs only run the tests; the builds run for a tag or by hand.
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && inputs.build != false
     strategy:
       fail-fast: false
       matrix:
@@ -159,4 +164,6 @@ jobs:
         with:
           files: dist/*
           prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
+          # release-please already made the release with the CHANGELOG notes;
+          # only a tag pushed by hand needs generated ones.
+          generate_release_notes: ${{ github.event_name == 'push' }}
