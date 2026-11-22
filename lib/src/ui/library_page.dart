@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../library/library.dart';
 import '../presets/ir_upload.dart';
+import 'tone3000_page.dart';
 import 'visuals.dart';
 
 /// The user's amp captures and IRs kept on the computer, next to the 20
@@ -24,6 +25,7 @@ class LibraryPage extends StatelessWidget {
     required this.messageIsError,
     required this.onReadNames,
     required this.onImport,
+    this.onBrowse,
     required this.onRename,
     required this.onDelete,
     required this.onSendItem,
@@ -51,6 +53,9 @@ class LibraryPage extends StatelessWidget {
   final bool messageIsError;
   final VoidCallback onReadNames;
   final VoidCallback onImport;
+
+  /// Opens the TONE3000 lists; null in a build without TONE3000's key.
+  final VoidCallback? onBrowse;
   final ValueChanged<LibraryItem> onRename;
   final ValueChanged<LibraryItem> onDelete;
   final ValueChanged<LibraryItem> onSendItem;
@@ -81,8 +86,8 @@ class LibraryPage extends StatelessWidget {
                   amp
                       ? 'Your amp captures: A2 .nam files from TONE3000. The '
                             'pedal plays their small (Lite) model.'
-                      : 'Your IRs: WAV, 44.1 kHz, mono, 24-bit, '
-                            '$irSampleCount samples.',
+                      : 'Your IRs: WAV files, converted to what the pedal '
+                            'plays (44.1 kHz, mono, $irSampleCount samples).',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -171,6 +176,36 @@ class LibraryPage extends StatelessWidget {
             label: Text(amp ? 'Add .nam files…' : 'Add WAV files…'),
           ),
         ),
+        if (onBrowse != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : onBrowse,
+                icon: const Icon(Icons.cloud_download_outlined),
+                label: Semantics(
+                  label: amp
+                      ? 'Get captures from TONE3000'
+                      : 'Get IRs from TONE3000',
+                  excludeSemantics: true,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          amp ? 'Get captures from' : 'Get IRs from',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Tone3000Logo(height: 14),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (list == null)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 32),
