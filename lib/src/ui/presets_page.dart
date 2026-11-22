@@ -63,6 +63,36 @@ class PresetWorkspace extends ChangeNotifier {
   List<String>? ampNames;
   List<String>? cabNames;
 
+  /// AMP models (user slots) that hold a capture made with its cabinet: a
+  /// preset that picks one has its CAB block turned off, or the sound would
+  /// go through two cabinets.
+  Set<int> ampWithCab = <int>{};
+
+  static const int _amp = 1, _cab = 5;
+
+  /// Turns the CAB block off in every preset of [draft] that plays AMP
+  /// model [slot]; returns the presets changed.
+  List<int> cabOffForAmp(int slot) {
+    final PresetBackup? d = draft;
+    if (d == null) {
+      return const <int>[];
+    }
+    final List<int> changed = <int>[
+      for (int id = 0; id < presetCount; id++)
+        if (d.model(id, _amp) == slot && d.isOn(id, _cab)) id,
+    ];
+    for (final int id in changed) {
+      d.setOn(id, _cab, false);
+    }
+    if (changed.contains(selected)) {
+      live?.toggle(_cab, false);
+    }
+    if (changed.isNotEmpty) {
+      notifyListeners();
+    }
+    return changed;
+  }
+
   /// The model's name: from the pedal for AMP and CAB when read (user
   /// uploads replace them), from the V1.05 list otherwise.
   String modelLabel(String block, int model) {
@@ -96,6 +126,12 @@ class PresetWorkspace extends ChangeNotifier {
   /// new model's defaults, and the draft takes them.
   Future<void> changeModel(int id, int block, int model) async {
     final PresetBackup d = draft!..setModel(id, block, model);
+    if (block == _amp && ampWithCab.contains(model) && d.isOn(id, _cab)) {
+      d.setOn(id, _cab, false);
+      if (selected == id) {
+        live?.toggle(_cab, false);
+      }
+    }
     notifyListeners();
     final Uint8List? body = await live?.model(block, model);
     // Only if the same draft is still open on the same preset.

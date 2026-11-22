@@ -35,10 +35,19 @@ void main() {
       throwsA(isA<InvalidNamFile>()),
     );
     await expectLater(
-      lib.import(LibraryKind.cab, 'x.wav', wav(bits: 16)),
+      lib.import(LibraryKind.cab, 'x.wav', Uint8List(40)),
       throwsA(isA<InvalidIrFile>()),
     );
     expect(await lib.list(LibraryKind.amp), hasLength(2));
+  });
+
+  test('an IR in another WAV shape is converted on the way in', () async {
+    final LibraryItem it = await lib.import(
+      LibraryKind.cab,
+      'Stereo 16-bit.wav',
+      wav(bits: 16, channels: 2, rate: 48000, frames: 3000),
+    );
+    Library.check(LibraryKind.cab, await it.file.readAsBytes());
   });
 
   test('links follow renames and go away with the file', () async {

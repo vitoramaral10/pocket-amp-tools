@@ -24,6 +24,7 @@ import '../presets/preset_backup.dart';
 import '../presets/preset_service.dart';
 import '../presets/preset_session.dart';
 import '../net/capped_http.dart';
+import '../tone3000/tone3000.dart';
 import '../presets/ir_upload.dart';
 import '../presets/nam_file.dart';
 import '../telemetry.dart';
@@ -32,6 +33,7 @@ import 'assistant_tools.dart';
 import 'backups_page.dart';
 import 'ble_pair_dialog.dart';
 import 'library_page.dart';
+import 'tone3000_page.dart';
 import 'onboarding.dart';
 import 'presets_page.dart';
 import 'visuals.dart';
@@ -45,13 +47,16 @@ const String officialFirmwareUrl =
 enum _Stage { idle, updating, success, failed }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.backend, this.libraryRoot});
+  const HomePage({super.key, this.backend, this.libraryRoot, this.tone3000});
 
   /// Injected in tests; the platform backend otherwise.
   final MidiBackend? backend;
 
   /// Injected in tests; `Documents/Pocket AMP Tools/Library` otherwise.
   final Directory? libraryRoot;
+
+  /// Injected in tests; the client of this build's key otherwise.
+  final Tone3000? tone3000;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -122,6 +127,7 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
     // Detection only sends the identity query, so it is safe to run unasked.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       unawaited(_detect());
+      unawaited(_loadWithCab());
       _portWatch = Timer.periodic(const Duration(seconds: 2), (_) {
         unawaited(_watchPorts(backend));
       });
@@ -911,8 +917,20 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
         ),
   );
 
+  /// Which AMP slots hold a capture made with its cabinet, for the editor.
+  Future<void> _loadWithCab() async {
+    try {
+      _workspace.ampWithCab = await (await _lib()).ampSlotsWithCab();
+    } on Object catch (e) {
+      if (e is! FileSystemException && e is! MissingPluginException) {
+        rethrow;
+      }
+    }
+  }
+
   Future<void> _loadLibrary() async {
     final LibraryKind k = _libKind;
+    unawaited(_loadWithCab());
     try {
       final Library lib = await _lib();
       final List<LibraryItem> items = await lib.list(k);
@@ -998,6 +1016,37 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
       ].join('\n');
       _presetError = failed.isNotEmpty;
     });
+    await _loadLibrary();
+  }
+
+  Tone3000? _tone3000;
+
+  Future<void> _browseTone3000() async {
+    final Library lib = await _lib();
+    final Tone3000 client = _tone3000 ??=
+        widget.tone3000 ??
+        Tone3000(
+          store: File(
+            '${(await getApplicationSupportDirectory()).path}'
+            '${Platform.pathSeparator}tone3000.json',
+          ),
+        );
+    if (!mounted) {
+      return;
+    }
+    final LibraryKind kind = _libKind;
+    await showTone3000(
+      context,
+      client: client,
+      ir: kind == LibraryKind.cab,
+      onImport: (String name, Uint8List bytes, Tone tone) async {
+        final LibraryItem item = await lib.import(kind, name, bytes);
+        if (kind == LibraryKind.amp && tone.includesCab) {
+          await lib.markWithCab(item);
+        }
+        return item;
+      },
+    );
     await _loadLibrary();
   }
 
@@ -1114,31 +1163,43 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
       bytes = await it.file.readAsBytes();
       Library.check(it.kind, bytes); // the file may have changed on disk
     }
-    final String? done = await _runPresetTask(
-      amp ? 'Sending the model' : 'Sending the IR',
-      () async {
-        void progress(double f) => setState(() => _presetFraction = f);
-        if (amp) {
-          _workspace.ampNames = await _presets.uploadAmp(
-            _pedal!,
-            slot,
-            namFileToImage(utf8.decode(bytes), name),
-            onProgress: progress,
-          );
-        } else {
-          _workspace.cabNames = await _presets.uploadIr(
-            _pedal!,
-            slot,
-            name,
-            parseIrWav(bytes),
-            onProgress: progress,
-          );
-        }
-        await (await _lib()).link(it.kind, slot, it);
-        return '"${it.name}" stored in ${amp ? 'AMP' : 'CAB'} slot ${slot + 1} '
-            'as "$name".';
-      },
-    );
+    final String? done = await _runPresetTask(amp ? 'Sending the model' : 'Sending the IR', () async {
+      void progress(double f) => setState(() => _presetFraction = f);
+      if (amp) {
+        _workspace.ampNames = await _presets.uploadAmp(
+          _pedal!,
+          slot,
+          namFileToImage(utf8.decode(bytes), name),
+          onProgress: progress,
+        );
+      } else {
+        _workspace.cabNames = await _presets.uploadIr(
+          _pedal!,
+          slot,
+          name,
+          parseIrWav(bytes),
+          onProgress: progress,
+        );
+      }
+      final Library lib = await _lib();
+      await lib.link(it.kind, slot, it);
+      final String stored =
+          '"${it.name}" stored in ${amp ? 'AMP' : 'CAB'} slot ${slot + 1} '
+          'as "$name".';
+      if (!amp) {
+        return stored;
+      }
+      _workspace.ampWithCab = await lib.ampSlotsWithCab();
+      if (!_workspace.ampWithCab.contains(slot)) {
+        return stored;
+      }
+      final List<int> off = _workspace.cabOffForAmp(slot);
+      return off.isEmpty
+          ? stored
+          : '$stored It holds its cabinet, so the CAB block was turned off '
+                'in ${off.map((int id) => 'P${(id + 1).toString().padLeft(2, '0')}').join(', ')}; write the presets to '
+                'keep it.';
+    });
     await _loadLibrary();
     return done;
   }
@@ -1356,6 +1417,9 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
         messageIsError: _presetError,
         onReadNames: _readNames,
         onImport: _importToLibrary,
+        onBrowse: widget.tone3000 != null || tone3000ClientId.isNotEmpty
+            ? _browseTone3000
+            : null,
         onRename: _renameInLibrary,
         onDelete: _deleteFromLibrary,
         onSendItem: _sendItem,

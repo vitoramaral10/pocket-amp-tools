@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../presets/ir_convert.dart';
 import '../presets/ir_upload.dart';
 import '../presets/nam_file.dart';
 
@@ -69,13 +70,24 @@ class Library {
   }
 
   /// Copies [bytes] into the library as [fileName] after checking the pedal
-  /// can take it; a name already in use gets " (2)", " (3)"...
+  /// can take it; a name already in use gets " (2)", " (3)"... An IR in
+  /// another WAV shape is converted to the pedal's first.
   Future<LibraryItem> import(
     LibraryKind kind,
     String fileName,
     Uint8List bytes,
   ) async {
+    if (kind == LibraryKind.cab) {
+      bytes = toPedalIrWav(bytes);
+    }
     check(kind, bytes);
+    // A capture that says it holds its cabinet is known as one.
+    final bool cab =
+        kind == LibraryKind.amp &&
+        <String>{
+          'amp_cab',
+          'amp-cab',
+        }.contains(namMetadata(utf8.decode(bytes))['gear_type']);
     final String base = _baseName(fileName, kind);
     final Directory d = await _dir(kind).create(recursive: true);
     File f = _file(d, base, kind);
@@ -83,7 +95,37 @@ class Library {
       f = _file(d, '$base ($n)', kind);
     }
     await f.writeAsBytes(bytes, flush: true);
-    return LibraryItem(kind, f);
+    final LibraryItem item = LibraryItem(kind, f);
+    if (cab) {
+      await markWithCab(item);
+    }
+    return item;
+  }
+
+  /// Records that [item] is an amp captured with its cabinet, so a preset
+  /// that plays it needs no CAB block.
+  Future<void> markWithCab(LibraryItem item) =>
+      _editLinks((Map<String, dynamic> all) {
+        final List<dynamic> names = _withCab(all);
+        if (!names.contains(item.fileName)) {
+          names.add(item.fileName);
+        }
+      });
+
+  /// The AMP slots (0..19) last written from a capture that holds its
+  /// cabinet, still in the library.
+  Future<Set<int>> ampSlotsWithCab() async {
+    final Map<String, dynamic> all = await _readLinks();
+    final Set<String> withCab = <String>{
+      for (final Object? n in _withCab(all))
+        if (n is String) n.substring(0, n.length - 4),
+    };
+    return <int>{
+      for (final MapEntry<int, String> e in (await links(
+        LibraryKind.amp,
+      )).entries)
+        if (withCab.contains(e.value)) e.key,
+    };
   }
 
   /// Throws [InvalidNamFile] or [InvalidIrFile] when the pedal cannot take
@@ -119,6 +161,11 @@ class Library {
         (String _, dynamic f) =>
             f == item.fileName ? '$base.${item.kind.extension}' : f,
       );
+      final List<dynamic> withCab = _withCab(kinds);
+      final int at = withCab.indexOf(item.fileName);
+      if (at >= 0) {
+        withCab[at] = '$base.${item.kind.extension}';
+      }
     });
     return LibraryItem(item.kind, moved);
   }
@@ -131,6 +178,7 @@ class Library {
         kinds,
         item.kind,
       ).removeWhere((String _, dynamic f) => f == item.fileName);
+      _withCab(kinds).remove(item.fileName);
     });
   }
 
@@ -180,6 +228,13 @@ class Library {
 
   static Map<String, dynamic> _slots(Map<String, dynamic> all, LibraryKind k) =>
       (all[k.name] ??= <String, dynamic>{}) as Map<String, dynamic>;
+
+  /// File names of the amp captures that hold their cabinet. A record from
+  /// an older version, or a broken one, has none.
+  static List<dynamic> _withCab(Map<String, dynamic> all) {
+    final Object? v = all['ampWithCab'];
+    return v is List ? v : (all['ampWithCab'] = <dynamic>[]);
+  }
 
   static File _file(Directory d, String base, LibraryKind k) =>
       File('${d.path}${Platform.pathSeparator}$base.${k.extension}');

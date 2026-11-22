@@ -19,6 +19,7 @@ dependencies:
   path_provider: ^2.1.6
   sentry_flutter: ^10.3.0
   universal_ble: ^3.1.0
+  url_launcher: ^6.3.3
 
 dev_dependencies:
   flutter_test:
@@ -30,3 +31,4 @@ flutter:
   assets:
     - assets/icon/app_icon.png
     - assets/blocks/
+    - assets/tone3000/tone3000_logo.svg
