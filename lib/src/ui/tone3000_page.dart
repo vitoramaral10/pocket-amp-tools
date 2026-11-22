@@ -548,34 +548,71 @@ class _Tone3000BrowserState extends State<Tone3000Browser> {
     );
   }
 
+  /// [url] decoded at the size it is shown, so a large photo is scaled
+  /// once, smoothly, instead of on every frame.
+  ImageProvider _sized(String url, double logical) => ResizeImage(
+    NetworkImage(url),
+    width: (logical * MediaQuery.devicePixelRatioOf(context)).ceil(),
+    policy: ResizeImagePolicy.fit,
+  );
+
   Widget _tile(ThemeData theme, Tone t) {
     final String initial = t.creator.isEmpty ? '?' : t.creator[0].toUpperCase();
     final String? avatar = t.avatarUrl;
+    final String? picture = t.imageUrl ?? avatar;
     final bool busy = _getting != null;
+    const double side = 48;
+    final Widget fallback = ColoredBox(
+      color: theme.colorScheme.secondaryContainer,
+      child: Center(
+        child: Text(
+          initial,
+          style: TextStyle(color: theme.colorScheme.onSecondaryContainer),
+        ),
+      ),
+    );
     return ListTile(
-      leading: CircleAvatar(
-        radius: 18,
-        child: avatar == null
-            ? Text(initial)
-            : ClipOval(
-                child: Image.network(
-                  avatar,
-                  width: 36,
-                  height: 36,
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: side,
+          height: side,
+          // Shown while the picture loads, so the row keeps its shape.
+          color: theme.colorScheme.surfaceContainerHighest,
+          child: picture == null
+              ? fallback
+              : Image(
+                  image: _sized(picture, side),
                   fit: BoxFit.cover,
-                  errorBuilder: (_, _, _) => Text(initial),
+                  filterQuality: FilterQuality.medium,
+                  errorBuilder: (_, _, _) => fallback,
                 ),
-              ),
+        ),
       ),
       title: Text(t.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-      subtitle: Text(
-        <String>[
-          'by ${t.creator}',
-          if (t.gear.isNotEmpty) t.gear,
-          if (widget.ir) 'IR' else 'NAM',
-          if (t.license.isNotEmpty) t.license,
-        ].join(' · '),
-        overflow: TextOverflow.ellipsis,
+      subtitle: Row(
+        children: <Widget>[
+          if (avatar != null) ...<Widget>[
+            CircleAvatar(
+              radius: 8,
+              backgroundColor: theme.colorScheme.secondaryContainer,
+              foregroundImage: _sized(avatar, 16),
+              onForegroundImageError: (_, _) {},
+            ),
+            const SizedBox(width: 6),
+          ],
+          Expanded(
+            child: Text(
+              <String>[
+                'by ${t.creator}',
+                if (t.gear.isNotEmpty) t.gear,
+                if (widget.ir) 'IR' else 'NAM',
+                if (t.license.isNotEmpty) t.license,
+              ].join(' · '),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,

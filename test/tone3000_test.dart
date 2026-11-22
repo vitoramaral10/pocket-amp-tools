@@ -172,6 +172,7 @@ void main() {
               'a2_models_count': 3,
               'license': 'cc-by',
               'url': 'https://www.tone3000.com/tones/plexi-7',
+              'images': <Object?>['https://assets.example/plexi.jpg'],
               'user': <String, Object?>{
                 'username': 'someone',
                 'display_name': null,
@@ -223,6 +224,8 @@ void main() {
     ]);
     expect(page.tones[0].creator, 'someone');
     expect(page.tones[0].avatarUrl, 'https://cdn.example/a.png');
+    expect(page.tones[0].imageUrl, 'https://assets.example/plexi.jpg');
+    expect(page.tones[1].imageUrl, isNull, reason: 'no picture given');
     expect(page.tones[1].creator, 'Verified Name');
     expect(page.tones[1].avatarUrl, isNull, reason: 'not https');
   });
