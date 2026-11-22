@@ -2,6 +2,19 @@
 
 What changed in each release, for people who use the app. The commit-level list of every release is on the [releases page](https://github.com/vitoramaral10/pocket-amp-tools/releases).
 
+## [0.6.0](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.5.0...v0.6.0) (2026-11-22)
+
+
+### Features
+
+* **library:** get captures and IRs from TONE3000 inside the app ([2707884](https://github.com/vitoramaral10/pocket-amp-tools/commit/2707884aa79d5aff4932b9723f62e19dbd9c215e))
+* **library:** get captures and IRs from TONE3000 inside the app ([075f529](https://github.com/vitoramaral10/pocket-amp-tools/commit/075f5299eb8eccbdb138dc6fc691d7e867fa5ee1))
+
+
+### Bug Fixes
+
+* **ci:** tag releases as vX.Y.Z so the builds publish ([bd4a1a5](https://github.com/vitoramaral10/pocket-amp-tools/commit/bd4a1a5c9f7eb12e87260f472c88471ade298a37))
+
 ## [0.5.0](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.4.0...v0.5.0) (2026-11-18)
 
 Error reports keep your user name out, on every system.
