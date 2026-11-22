@@ -58,7 +58,7 @@ Each release lists the SHA-256 of every file in `SHA256SUMS.txt`. Releases from 
 2. Charge the pedal, connect it with a USB **data** cable and turn it on.
 3. Close the M-VAVE app and anything else that uses MIDI (DAWs, browser tabs with Web MIDI).
 4. Open Pocket AMP Tools. It detects the pedal and shows the installed version.
-5. Open the **Firmware** section and click **Download from M-VAVE** (fetches the official file from M-VAVE's server) or **Open .fwsc file…** if you already have it.
+5. Open the **Firmware** section. With the pedal on USB, the app fetches the official file from M-VAVE's server on its own (once per run) and says whether your pedal is already up to date; if it is, there is nothing else to do. To use a file you already have, click **Open .fwsc file…**.
 6. Click **Update firmware**, confirm, and wait about two minutes. The pedal restarts twice: once into update mode, once into the new firmware.
 7. Click **Restore my presets from before the update**. Only the presets and EQ that changed are written back, and the result is read back to check it.
 
