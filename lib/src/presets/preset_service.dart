@@ -175,12 +175,8 @@ class PresetService {
         onProgress?.call((i + 1) / packets.length);
       }
       final List<String> names = await s.readNames(amp: amp);
-      // The pedal overwrites the first character of the first name.
       final String got = names[slot];
-      final bool same = slot == 0
-          ? got.length == want.length && got.substring(1) == want.substring(1)
-          : got == want;
-      if (!same) {
+      if (got != want) {
         throw PresetIoException(
           'The pedal answered, but slot ${slot + 1} reads "$got", not '
           '"$want". Send the $what again.',

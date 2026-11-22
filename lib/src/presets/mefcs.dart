@@ -169,7 +169,8 @@ Uint8List readLivePacket() => _seal(<int>[
 ]);
 
 /// Model names stored in flash, 20 records of 14 bytes: AMP (`amp` true) or
-/// CAB. Byte 0 of the answer is overwritten by this request's checksum.
+/// CAB. The answer comes back whole, first character included (read five
+/// times on a V1.05 pedal).
 Uint8List readNamesPacket({required bool amp}) => _seal(<int>[
   0x00, 0x59, 0x23, 0x08, 0x00, 0x00, 0x05, //
   0x00, 0x00, 0x00, amp ? 0x90 : 0x80, 0x18, 0x01, 0x00,

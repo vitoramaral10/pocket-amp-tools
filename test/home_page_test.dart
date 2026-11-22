@@ -83,6 +83,7 @@ void main() {
     await settle();
     expect(find.text('My Capture'), findsOneWidget);
     expect(find.text('Load from library…'), findsNWidgets(20));
+    expect(find.text('1J900_CL'), findsOneWidget, reason: 'slot 1 shown whole');
 
     await tester.tap(find.text('Send to pedal…'));
     await settle(5);

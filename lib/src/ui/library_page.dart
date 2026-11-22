@@ -330,7 +330,7 @@ class LibraryPage extends StatelessWidget {
                         ),
                       ),
                     ),
-                    title: Text(slotName(n, i)),
+                    title: Text(n[i]),
                     subtitle: links[i] == null
                         ? null
                         : Text('From your library: ${links[i]}'),
@@ -355,11 +355,6 @@ class LibraryPage extends StatelessWidget {
   }
 }
 
-/// The pedal overwrites the first character of the first name with the
-/// request's checksum.
-String slotName(List<String> names, int i) =>
-    i == 0 && names[0].isNotEmpty ? '?${names[0].substring(1)}' : names[i];
-
 /// Picks one of the 20 slots; null when cancelled.
 Future<int?> chooseSlot(
   BuildContext context,
@@ -376,7 +371,7 @@ Future<int?> chooseSlot(
         SimpleDialogOption(
           onPressed: () => Navigator.pop(context, i),
           child: Text(
-            '${i + 1}.  ${slotName(names, i)}'
+            '${i + 1}.  ${names[i]}'
             '${links[i] == null ? '' : '  (from ${links[i]})'}',
           ),
         ),
