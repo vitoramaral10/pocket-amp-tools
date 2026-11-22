@@ -81,6 +81,7 @@ class Tone {
     required this.title,
     required this.creator,
     required this.avatarUrl,
+    this.imageUrl,
     required this.gear,
     required this.format,
     required this.a2Models,
@@ -94,6 +95,9 @@ class Tone {
   /// The creator's display name, or the user name.
   final String creator;
   final String? avatarUrl;
+
+  /// The first picture of the gear, when the creator gave one.
+  final String? imageUrl;
   final String gear;
   final String format;
 
@@ -128,6 +132,10 @@ class Tone {
       title: text(j['title']),
       creator: name.isEmpty ? text(u['username']) : name,
       avatarUrl: _https(u['avatar_url']),
+      imageUrl:
+          j['images'] is List && (j['images']! as List<Object?>).isNotEmpty
+          ? _https((j['images']! as List<Object?>).first)
+          : null,
       gear: text(j['gear']),
       format: text(j['format']),
       a2Models: j['a2_models_count'] is int ? j['a2_models_count']! as int : 0,
