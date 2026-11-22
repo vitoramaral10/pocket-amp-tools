@@ -6,3 +6,4 @@ Exec=pocket-amp-tools
 Icon=pocket-amp-tools
 Categories=AudioVideo;Audio;Utility;
 Terminal=false
+StartupWMClass=io.github.vitoramaral10.pocket_amp_upgrader
