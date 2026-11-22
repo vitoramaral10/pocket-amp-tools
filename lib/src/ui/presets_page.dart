@@ -105,14 +105,7 @@ class PresetWorkspace extends ChangeNotifier {
     if (fromPedal == null || model >= fromPedal.length) {
       return known ?? 'Model ${model + 1}';
     }
-    final String raw = fromPedal[model];
-    if (model == 0 && raw.isNotEmpty) {
-      // The pedal overwrites the first character of the first name.
-      return known != null && raw.substring(1) == known.substring(1)
-          ? known
-          : '?${raw.substring(1)}';
-    }
-    return raw;
+    return fromPedal[model];
   }
 
   void showOnPedal() {

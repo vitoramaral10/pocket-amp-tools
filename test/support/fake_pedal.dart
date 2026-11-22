@@ -351,7 +351,6 @@ List<int> bankReply(FakePedal pedal, Uint8List packet) {
             (int i) => i < n.length ? n.codeUnitAt(i) : 0,
           ),
       ];
-      names[0] = packet.last; // the pedal stamps the request's checksum here
       return answer(names);
     }
     return answer(
