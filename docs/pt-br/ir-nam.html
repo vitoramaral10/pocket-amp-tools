@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carregar IRs e capturas NAM no Pocket AMP · Pocket AMP Tools</title>
+<meta name="description" content="Como enviar os seus próprios impulse responses e capturas NAM do TONE3000 para os 20 slots de CAB e os 20 de AMP do M-VAVE ou Donner Pocket AMP, do Coolmusic PIXIE1 ou do New Bee SK17, no macOS, Linux, Windows ou Android.">
+<link rel="canonical" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/ir-nam.html">
+<link rel="alternate" hreflang="en" href="https://vitoramaral10.github.io/pocket-amp-tools/ir-nam.html">
+<link rel="alternate" hreflang="pt-BR" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/ir-nam.html">
+<link rel="alternate" hreflang="x-default" href="https://vitoramaral10.github.io/pocket-amp-tools/ir-nam.html">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:title" content="Carregar IRs e capturas NAM no Pocket AMP">
+<meta property="og:description" content="Envie impulse responses em WAV e capturas NAM do TONE3000 para os slots de CAB e AMP do pedal com um app gratuito e de código aberto.">
+<meta property="og:url" content="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/ir-nam.html">
+<meta property="og:image" content="https://vitoramaral10.github.io/pocket-amp-tools/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="../icon.png">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<nav class="wrap nav" aria-label="Site">
+  <a href="./">Início</a>
+  <a href="atualizar-firmware.html">Atualizar o firmware</a>
+  <a href="ir-nam.html" aria-current="page">IRs e capturas NAM</a>
+  <a href="../ir-nam.html" lang="en" hreflang="en">English</a>
+</nav>
+<main>
+  <header class="wrap">
+    <p class="eyebrow">Guia · IRs e capturas de amplificador</p>
+    <h1>Carregar IRs e capturas NAM no Pocket AMP</h1>
+    <p class="lead prose">O pedal tem 20 slots de CAB para impulse responses e 20 slots de AMP para capturas neurais de amplificador. O Pocket AMP Tools, um app gratuito e de código aberto, preenche esses slots com os seus arquivos no macOS, Linux, Windows ou Android.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="https://github.com/vitoramaral10/pocket-amp-tools/releases/latest">Baixar o app</a>
+    </div>
+    <p class="note">Funciona igual no M-VAVE Pocket AMP, no Donner Pocket AMP, no Coolmusic PIXIE1 e no New Bee SK17. O app está em inglês; os nomes dos botões aparecem aqui como estão na tela. Ferramenta da comunidade, sem vínculo com nenhuma marca do pedal nem com o TONE3000.</p>
+  </header>
+
+  <article class="wrap">
+    <div class="prose">
+      <h2>O que o pedal aceita</h2>
+      <table>
+        <thead><tr><th scope="col"></th><th scope="col">Arquivo</th><th scope="col">Vai para</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Impulse response</th><td>WAV, 44,1 kHz, mono, 24 bits, 2048 amostras</td><td>Um dos 20 slots de CAB</td></tr>
+          <tr><th scope="row">Captura de amplificador</th><td>Um arquivo <code>.nam</code> A2 do <a href="https://www.tone3000.com">TONE3000</a></td><td>Um dos 20 slots de AMP</td></tr>
+        </tbody>
+      </table>
+      <p>Um arquivo <code>.nam</code> A2 traz uma rede para cada tamanho. A menor, a Lite, é exatamente a rede que o pedal roda, então o app copia os pesos dela para o formato do pedal sem treinar nem converter nada. Arquivos <code>.nam</code> A1 e de qualquer outro formato não cabem no pedal e são recusados, com o motivo.</p>
+      <p>Pelo código do firmware, ele parece guardar só as primeiras 1024 das 2048 amostras de um IR.</p>
+
+      <h2>Enviar um arquivo para o pedal</h2>
+      <ol>
+        <li>Conecte o pedal com um cabo USB de dados e abra o Pocket AMP Tools.</li>
+        <li>Abra a seção <strong>Library</strong> e adicione os seus arquivos pelo botão no topo. Eles são copiados para <code>Documents/Pocket AMP Tools/Library</code>, então os originais podem sair de onde estão.</li>
+        <li>Clique em <strong>Send to pedal…</strong> num arquivo e escolha o slot, ou em <strong>Load from library…</strong> num slot e escolha o arquivo.</li>
+        <li>Na seção <strong>Presets</strong>, escolha o modelo novo no bloco AMP ou CAB. Os modelos que você enviou aparecem com o próprio nome, e a troca é ouvida na hora.</li>
+      </ol>
+
+      <h2>O que acontece com o slot</h2>
+      <p>O envio grava na memória flash do pedal e continua lá depois de desligar. O que estava no slot se perde de vez: o firmware V1.05 não tem como ler um IR ou uma captura de volta do pedal. Por isso a biblioteca registra qual arquivo foi para qual slot, e o slot mostra isso. Slots preenchidos de fábrica ou por outro app não têm arquivo associado.</p>
+      <p>Antes de sobrescrever um slot de fábrica de que você gosta, escolha outro: o som de fábrica não pode ser salvo antes.</p>
+
+      <h2>Por Bluetooth</h2>
+      <p>No Android e no Linux o app também alcança o pedal por Bluetooth. Ler, editar e gravar presets pelo rádio foi conferido num pedal; enviar um IR ou uma captura assim ainda não foi testado em um, então prefira o cabo para a biblioteca e <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">conte para a gente</a> se o Bluetooth funcionou com você.</p>
+
+      <h2>Perguntas</h2>
+      <details><summary>Onde consigo capturas?</summary>
+        <p>O <a href="https://www.tone3000.com">TONE3000</a> hospeda capturas NAM gratuitas de amplificadores e pedais. Procure capturas no formato A2; o app avisa se o arquivo for de outro tipo.</p></details>
+      <details><summary>Posso usar um arquivo NAM comum?</summary>
+        <p>Só arquivos A2. O pedal roda uma rede pequena e fixa, e um arquivo A2 já traz essa rede. Qualquer outro <code>.nam</code> teria de ser treinado de novo nesse formato, o que o app não faz.</p></details>
+      <details><summary>Preciso do firmware mais novo?</summary>
+        <p>O envio foi medido na V1.05. Se o seu pedal roda uma versão mais antiga, <a href="atualizar-firmware.html">atualize primeiro</a> com o mesmo app.</p></details>
+    </div>
+  </article>
+</main>
+<footer class="wrap">
+  <p class="prose">O Pocket AMP Tools é código aberto (GPL-3.0). Achou um problema ou testou no seu pedal? <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">Conte no GitHub</a>. M-VAVE, Pocket AMP, Donner, Coolmusic PIXIE1, New Bee SK17 e TONE3000 são marcas dos respectivos donos.</p>
+</footer>
+</body>
+</html>
