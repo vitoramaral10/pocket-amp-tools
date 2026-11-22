@@ -321,6 +321,40 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
   bool get _canUpdate =>
       !_busy && _package != null && _pedal != null && _blockers.isEmpty;
 
+  /// The pedal already runs the firmware loaded, and nothing else stands in
+  /// the way: there is nothing to update.
+  bool get _upToDate {
+    final FirmwarePackage? p = _package;
+    final DetectedPedal? d = _pedal;
+    // The same identity means the same pedal family and version.
+    return p != null &&
+        d != null &&
+        !d.inLoader &&
+        !d.port.bluetooth &&
+        d.identity == p.product;
+  }
+
+  /// The official firmware was fetched once on its own this run, to tell
+  /// whether the pedal is up to date.
+  bool _checkedLatest = false;
+
+  /// Fetches the official firmware the first time the Firmware section shows
+  /// a pedal on USB, so it can say at once whether there is anything new.
+  void _checkLatest() {
+    final DetectedPedal? d = _pedal;
+    if (_checkedLatest ||
+        _section != 2 ||
+        _busy ||
+        _package != null ||
+        d == null ||
+        d.inLoader ||
+        d.port.bluetooth) {
+      return;
+    }
+    _checkedLatest = true;
+    unawaited(_download());
+  }
+
   // --- actions --------------------------------------------------------------
 
   Future<void> _openFile() async {
@@ -467,6 +501,7 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
       } else {
         await _startLive();
       }
+      _checkLatest();
     }
   }
 
@@ -1378,6 +1413,9 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
       if (i == 1 && _libItems == null) {
         _loadLibrary();
       }
+      if (i == 2) {
+        _checkLatest();
+      }
     }
   }
 
@@ -1695,44 +1733,66 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
                         )
                       : null,
                 ),
-              if (_package != null &&
+              if (_upToDate) ...<Widget>[
+                _UpToDateBanner(
+                  version: _package!.version,
+                  official: _packageSource == 'M-VAVE download',
+                ),
+                const SizedBox(height: 12),
+              ] else if (_package != null &&
                   _pedal != null &&
                   !_pedal!.inLoader &&
                   !_pedal!.port.bluetooth) ...<Widget>[
                 _VersionBanner(from: _pedal!.version, to: _package!.version),
+                const SizedBox(height: 12),
+              ] else if (_loadingPackage && _pedal != null) ...<Widget>[
+                const Card(
+                  child: ListTile(
+                    leading: SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    title: Text('Checking for a newer firmware…'),
+                  ),
+                ),
                 const SizedBox(height: 12),
               ],
               _firmwareCard(theme),
               const SizedBox(height: 12),
               _pedalCard(theme),
               const SizedBox(height: 12),
-              const _WarningCard(),
-              const SizedBox(height: 16),
-              for (final String b in _blockers)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    b,
-                    style: TextStyle(color: theme.colorScheme.error),
+              // Nothing to update: no warnings and no button to press.
+              if (!_upToDate) ...<Widget>[
+                const _WarningCard(),
+                const SizedBox(height: 16),
+              ],
+              if (!_upToDate)
+                for (final String b in _blockers)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      b,
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
                   ),
-                ),
               if (_presetTask != null && _stage == _Stage.idle)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: Text('$_presetTask…'),
                 ),
-              FilledButton.icon(
-                onPressed: _canUpdate ? _confirmAndUpdate : null,
-                icon: const Icon(Icons.system_update_alt),
-                label: Text(
-                  _pedal?.inLoader == true
-                      ? 'Resume update'
-                      : 'Update firmware',
+              if (!_upToDate)
+                FilledButton.icon(
+                  onPressed: _canUpdate ? _confirmAndUpdate : null,
+                  icon: const Icon(Icons.system_update_alt),
+                  label: Text(
+                    _pedal?.inLoader == true
+                        ? 'Resume update'
+                        : 'Update firmware',
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                  ),
                 ),
-                style: FilledButton.styleFrom(
-                  minimumSize: const Size.fromHeight(52),
-                ),
-              ),
             ],
           ],
         ),
@@ -2073,6 +2133,59 @@ class _StatusLogo extends StatelessWidget {
 }
 
 /// The version change an update makes, shown above the steps.
+/// The pedal already runs the firmware [version]: nothing to update.
+class _UpToDateBanner extends StatelessWidget {
+  const _UpToDateBanner({required this.version, required this.official});
+  final String version;
+
+  /// [version] is the one on M-VAVE's server now, not a file the user chose.
+  final bool official;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme c = theme.colorScheme;
+    return Card(
+      color: c.secondaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: <Widget>[
+            Icon(
+              Icons.verified_outlined,
+              size: 48,
+              color: c.onSecondaryContainer,
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Your pedal is up to date',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: c.onSecondaryContainer,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    official
+                        ? 'It runs $version, the latest firmware from M-VAVE.'
+                        : 'It runs $version, the version in this file.',
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: c.onSecondaryContainer,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _VersionBanner extends StatelessWidget {
   const _VersionBanner({required this.from, required this.to});
   final String from;
