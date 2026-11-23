@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Carregar IRs e capturas NAM no Pocket AMP · Pocket AMP Tools</title>
-<meta name="description" content="Como enviar os seus próprios impulse responses e capturas NAM do TONE3000 para os 20 slots de CAB e os 20 de AMP do M-VAVE ou Donner Pocket AMP, do Coolmusic PIXIE1 ou do New Bee SK17, no macOS, Linux, Windows ou Android.">
+<meta name="description" content="Como enviar impulse responses em qualquer formato de WAV e capturas NAM do TONE3000 para os 20 slots de CAB e os 20 de AMP do M-VAVE ou Donner Pocket AMP, do Coolmusic PIXIE1 ou do New Bee SK17, no macOS, Linux, Windows ou Android.">
 <link rel="canonical" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/ir-nam.html">
 <link rel="alternate" hreflang="en" href="https://vitoramaral10.github.io/pocket-amp-tools/ir-nam.html">
 <link rel="alternate" hreflang="pt-BR" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/ir-nam.html">
@@ -23,8 +23,10 @@
 <body>
 <nav class="wrap nav" aria-label="Site">
   <a href="./">Início</a>
-  <a href="atualizar-firmware.html">Atualizar o firmware</a>
+  <a href="tone3000.html">TONE3000</a>
   <a href="ir-nam.html" aria-current="page">IRs e capturas NAM</a>
+  <a href="sincronizar.html">Sincronizar aparelhos</a>
+  <a href="atualizar-firmware.html">Atualizar o firmware</a>
   <a href="../ir-nam.html" lang="en" hreflang="en">English</a>
 </nav>
 <main>
@@ -44,17 +46,20 @@
       <table>
         <thead><tr><th scope="col"></th><th scope="col">Arquivo</th><th scope="col">Vai para</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Impulse response</th><td>WAV, 44,1 kHz, mono, 24 bits, 2048 amostras</td><td>Um dos 20 slots de CAB</td></tr>
+          <tr><th scope="row">Impulse response</th><td>WAV em qualquer formato; o app converte para 44,1 kHz, mono, 24 bits, 2048 amostras</td><td>Um dos 20 slots de CAB</td></tr>
           <tr><th scope="row">Captura de amplificador</th><td>Um arquivo <code>.nam</code> A2 do <a href="https://www.tone3000.com">TONE3000</a></td><td>Um dos 20 slots de AMP</td></tr>
         </tbody>
       </table>
       <p>Um arquivo <code>.nam</code> A2 traz uma rede para cada tamanho. A menor, a Lite, é exatamente a rede que o pedal roda, então o app copia os pesos dela para o formato do pedal sem treinar nem converter nada. Arquivos <code>.nam</code> A1 e de qualquer outro formato não cabem no pedal e são recusados, com o motivo.</p>
-      <p>Pelo código do firmware, ele parece guardar só as primeiras 1024 das 2048 amostras de um IR.</p>
+      <p>O pedal aceita IR num formato só: 44,1 kHz, mono, 24 bits, 2048 amostras. Um WAV em qualquer outro formato (outra taxa de amostragem, estéreo, 16 ou 32 bits, float, mais longo ou mais curto) é convertido quando você adiciona: misturado em mono, reamostrado, cortado em 2048 amostras com um fade curto ou completado com silêncio, e mantido no mesmo nível, a não ser que fosse clipar. Um arquivo que já esteja no formato do pedal fica igual, byte a byte. Pelo código do firmware, ele parece guardar só as primeiras 1024 das 2048 amostras de um IR.</p>
+
+      <h2>Direto do TONE3000</h2>
+      <p>Não precisa baixar arquivos na mão: <strong>Get captures from TONE3000</strong> e <strong>Get IRs from TONE3000</strong>, na Library, buscam e navegam no <a href="https://www.tone3000.com">TONE3000</a> dentro do app e colocam o que você escolher na biblioteca, já conferido. Capturas feitas junto com a caixa (<em>amp-cab</em>) desligam o bloco CAB onde tocam. Veja o <a href="tone3000.html">guia do TONE3000</a>.</p>
 
       <h2>Enviar um arquivo para o pedal</h2>
       <ol>
         <li>Conecte o pedal com um cabo USB de dados e abra o Pocket AMP Tools.</li>
-        <li>Abra a seção <strong>Library</strong> e adicione os seus arquivos pelo botão no topo. Eles são copiados para <code>Documents/Pocket AMP Tools/Library</code>, então os originais podem sair de onde estão.</li>
+        <li>Abra a seção <strong>Library</strong> e adicione os seus arquivos pelo botão no topo (<strong>Add .nam files…</strong> em <strong>Amps</strong>, <strong>Add WAV files…</strong> em <strong>Cabinets</strong>), ou pegue do TONE3000 pelo botão logo abaixo. Eles são copiados para <code>Documents/Pocket AMP Tools/Library</code>, então os originais podem sair de onde estão. Com a <a href="sincronizar.html">sincronização</a> ligada, os seus outros aparelhos também recebem.</li>
         <li>Clique em <strong>Send to pedal…</strong> num arquivo e escolha o slot, ou em <strong>Load from library…</strong> num slot e escolha o arquivo.</li>
         <li>Na seção <strong>Presets</strong>, escolha o modelo novo no bloco AMP ou CAB. Os modelos que você enviou aparecem com o próprio nome, e a troca é ouvida na hora.</li>
       </ol>
@@ -68,7 +73,9 @@
 
       <h2>Perguntas</h2>
       <details><summary>Onde consigo capturas?</summary>
-        <p>O <a href="https://www.tone3000.com">TONE3000</a> hospeda capturas NAM gratuitas de amplificadores e pedais. Procure capturas no formato A2; o app avisa se o arquivo for de outro tipo.</p></details>
+        <p>O <a href="https://www.tone3000.com">TONE3000</a> hospeda capturas NAM gratuitas de amplificadores e pedais, e o app mostra o TONE3000 dentro da Library, listando só as capturas A2 que o pedal consegue tocar. Veja o <a href="tone3000.html">guia do TONE3000</a>.</p></details>
+      <details><summary>O meu IR é de 48 kHz, ou estéreo. Funciona?</summary>
+        <p>Sim. O app converte para o formato do pedal quando você adiciona, e avisa se o arquivo não puder ser lido.</p></details>
       <details><summary>Posso usar um arquivo NAM comum?</summary>
         <p>Só arquivos A2. O pedal roda uma rede pequena e fixa, e um arquivo A2 já traz essa rede. Qualquer outro <code>.nam</code> teria de ser treinado de novo nesse formato, o que o app não faz.</p></details>
       <details><summary>Preciso do firmware mais novo?</summary>

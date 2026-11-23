@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Celular e computador sincronizados · Pocket AMP Tools</title>
+<meta name="description" content="Pareie o celular e o computador uma vez e o Pocket AMP Tools mantém a biblioteca do Pocket AMP, os backups e as notas dos presets iguais nos dois, na sua própria rede, com criptografia, sem conta nem servidor.">
+<link rel="canonical" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/sincronizar.html">
+<link rel="alternate" hreflang="en" href="https://vitoramaral10.github.io/pocket-amp-tools/sync.html">
+<link rel="alternate" hreflang="pt-BR" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/sincronizar.html">
+<link rel="alternate" hreflang="x-default" href="https://vitoramaral10.github.io/pocket-amp-tools/sync.html">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:title" content="Celular e computador sincronizados">
+<meta property="og:description" content="A biblioteca do Pocket AMP, os backups e as notas dos presets em todos os seus aparelhos, sincronizados na sua rede, sem conta nem servidor.">
+<meta property="og:url" content="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/sincronizar.html">
+<meta property="og:image" content="https://vitoramaral10.github.io/pocket-amp-tools/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="../icon.png">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<nav class="wrap nav" aria-label="Site">
+  <a href="./">Início</a>
+  <a href="tone3000.html">TONE3000</a>
+  <a href="ir-nam.html">IRs e capturas NAM</a>
+  <a href="sincronizar.html" aria-current="page">Sincronizar aparelhos</a>
+  <a href="atualizar-firmware.html">Atualizar o firmware</a>
+  <a href="../sync.html" lang="en" hreflang="en">English</a>
+</nav>
+<main>
+  <header class="wrap">
+    <p class="eyebrow">Guia · Sincronizar aparelhos</p>
+    <h1>Celular e computador sincronizados</h1>
+    <p class="lead prose">Pegue uma captura no celular no ensaio e encontre no computador em casa. O Pocket AMP Tools mantém os seus aparelhos iguais sozinho, conversando direto entre eles na sua rede: sem conta, sem servidor, sem nuvem.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="https://github.com/vitoramaral10/pocket-amp-tools/releases/latest">Baixar o app</a>
+    </div>
+    <p class="note">Versão 0.7.0 ou mais nova em todos os aparelhos. Windows, macOS, Linux e Android. O app está em inglês; os botões aparecem aqui como na tela.</p>
+  </header>
+
+  <article class="wrap">
+    <div class="prose">
+      <h2>Parear dois aparelhos</h2>
+      <ol>
+        <li>Abra o app nos dois, no mesmo Wi-Fi ou na mesma rede.</li>
+        <li>Em cada um, abra <strong>Sync devices</strong>: o botão de aparelhos no topo da janela, ou o menu (⋮) no celular. Ligue <strong>Keep my devices in sync</strong>.</li>
+        <li>Em alguns segundos cada aparelho lista o outro em <strong>Other devices on this network</strong>. Clique em <strong>Pair</strong> em um deles.</li>
+        <li>As duas telas mostram o mesmo código de seis dígitos. Confira se é igual e clique em <strong>Codes match</strong> nas duas.</li>
+      </ol>
+      <p>Isso é feito uma vez só para cada par de aparelhos. Para incluir um terceiro, pareie com cada um dos outros do mesmo jeito.</p>
+
+      <h2>O que sincroniza e o que não sincroniza</h2>
+      <table>
+        <thead><tr><th scope="col">Sincroniza</th><th scope="col">Fica em cada aparelho</th></tr></thead>
+        <tbody>
+          <tr><td>A biblioteca: capturas de amplificador, IRs e qual arquivo foi para qual slot</td><td>A chave e os ajustes do assistente</td></tr>
+          <tr><td>Os backups de presets</td><td>O login do TONE3000</td></tr>
+          <tr><td>Nomes, descrições, etiquetas e estrelas dos presets</td><td>O consentimento de relatórios de erro e os ajustes do app</td></tr>
+        </tbody>
+      </table>
+      <p>Os presets em si ficam no pedal, então cada aparelho lê de lá. Depois de parear, os aparelhos sincronizam alguns segundos depois de qualquer mudança, sem botão. Vale a última edição de cada item, e apagar um arquivo num aparelho apaga nos outros.</p>
+
+      <h2>Quando sincroniza</h2>
+      <p>Sempre que o app está aberto nos dois aparelhos, na mesma rede. Com o app fechado nada sincroniza, e na próxima vez que os dois estiverem abertos eles se atualizam. No Android fica uma notificação enquanto a sincronização está ligada, para o celular continuar sincronizando com a tela apagada; ela some quando você fecha o app pela lista de recentes.</p>
+
+      <h2>Privado por princípio</h2>
+      <ul>
+        <li>Os aparelhos conversam direto entre si; nada passa pela internet nem pelo servidor de ninguém.</li>
+        <li>Tudo vai criptografado de ponta a ponta (X25519 e ChaCha20-Poly1305). A conferência dos seis dígitos garante que nenhum outro aparelho da rede se meteu no meio durante o pareamento.</li>
+        <li>Um aparelho que nunca foi pareado não recebe nada, e o que chega é conferido como um arquivo que você mesmo adiciona.</li>
+      </ul>
+
+      <h2>Se os aparelhos não se enxergam</h2>
+      <ul>
+        <li><strong>Linux:</strong> um firewall como o ufw ou o firewalld bloqueia os outros aparelhos. A página de sincronização avisa, e <strong>Let sync through</strong> libera a porta só para redes de casa e de escritório (endereços privados), depois de o sistema pedir a sua senha. Outros firewalls precisam da porta <strong>47913</strong> (TCP e UDP) liberada à mão.</li>
+        <li><strong>Windows e macOS</strong> perguntam uma vez se o app pode usar a rede: permita.</li>
+        <li><strong>Wi-Fi de visitante e de empresa</strong> costumam isolar os aparelhos. Tente a rede de casa ou o roteador do celular.</li>
+        <li>Os dois aparelhos precisam do app aberto com <strong>Keep my devices in sync</strong> ligado, e na mesma versão.</li>
+      </ul>
+
+      <h2>Perguntas</h2>
+      <details><summary>Preciso de conta?</summary>
+        <p>Não. O pareamento é entre os seus aparelhos, e nada fica guardado em outro lugar.</p></details>
+      <details><summary>E se eu editar a nota do mesmo preset em dois aparelhos?</summary>
+        <p>Vale a edição mais recente quando eles sincronizarem. Quem decide o que é mais recente são os relógios dos aparelhos, então deixe-os na hora automática.</p></details>
+      <details><summary>Como paro de sincronizar com um aparelho?</summary>
+        <p>Clique no botão de desvincular ao lado dele em <strong>Paired devices</strong> e confirme. Nada é apagado em nenhum dos dois; esqueça-o no outro também, ou pareie de novo depois.</p></details>
+    </div>
+  </article>
+</main>
+<footer class="wrap">
+  <p class="prose">O Pocket AMP Tools é código aberto (GPL-3.0). Achou um problema? <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">Conte no GitHub</a>. M-VAVE, Pocket AMP, Donner, Coolmusic PIXIE1 e New Bee SK17 são marcas dos respectivos donos.</p>
+</footer>
+</body>
+</html>
