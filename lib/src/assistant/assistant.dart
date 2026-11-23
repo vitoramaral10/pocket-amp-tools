@@ -12,6 +12,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 import '../presets/block_models.dart';
+import '../private_file.dart';
 import '../presets/preset_backup.dart' show knobLabels, knobNames;
 
 class AssistantSettings {
@@ -90,20 +91,8 @@ class AssistantSettings {
   }
 
   Future<void> save() async {
-    final File f = await _file();
-    await f.parent.create(recursive: true);
-    // Written aside and locked down before it takes the real name, so the
-    // key is never readable by others, even for a moment.
-    final File tmp = File('${f.path}.tmp');
-    await tmp.writeAsString('');
-    if (Platform.isLinux || Platform.isMacOS) {
-      try {
-        await Process.run('chmod', <String>['600', tmp.path]);
-      } catch (_) {
-        // Best effort: the file still works.
-      }
-    }
-    await tmp.writeAsString(
+    await writePrivate(
+      await _file(),
       jsonEncode(<String, Object>{
         'provider': provider,
         'baseUrl': baseUrl.trim(),
@@ -111,9 +100,7 @@ class AssistantSettings {
         'apiKey': apiKey.trim(),
         'autoWrite': autoWrite,
       }),
-      flush: true,
     );
-    await tmp.rename(f.path);
   }
 }
 

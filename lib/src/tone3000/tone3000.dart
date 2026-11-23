@@ -13,6 +13,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../net/capped_http.dart';
+import '../private_file.dart';
 
 /// The app's publishable key from tone3000.com/settings: made to be shipped
 /// in public apps. A fork sets its own with `--dart-define`; an empty one
@@ -445,7 +446,7 @@ class Tone3000 {
     final Object? seconds = token['expires_in'];
     _expires = seconds is int ? _now().add(Duration(seconds: seconds)) : null;
     _loaded = true;
-    await _writePrivate(
+    await writePrivate(
       store,
       jsonEncode(<String, Object?>{
         'access_token': _access,
@@ -522,21 +523,4 @@ class Tone3000 {
       'TONE3000 answered with error $status'
           '${_error(body) == null ? '' : ' (${_error(body)})'}.',
   };
-}
-
-/// Writes [text] to [file] so that it is never readable by others, even for
-/// a moment: written aside, locked down, then given the real name.
-Future<void> _writePrivate(File file, String text) async {
-  await file.parent.create(recursive: true);
-  final File tmp = File('${file.path}.tmp');
-  await tmp.writeAsString('');
-  if (Platform.isLinux || Platform.isMacOS) {
-    try {
-      await Process.run('chmod', <String>['600', tmp.path]);
-    } catch (_) {
-      // Best effort: the file still works.
-    }
-  }
-  await tmp.writeAsString(text, flush: true);
-  await tmp.rename(file.path);
 }

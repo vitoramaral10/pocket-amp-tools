@@ -1,9 +1,12 @@
 package io.github.vitoramaral10.pocketamptools
 
+import android.Manifest
 import android.app.Activity
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -35,6 +38,30 @@ class MainActivity : FlutterActivity() {
                     result.success(emptyList<Map<String, String>>())
                 }
             }
+        // Keeps syncing with the screen off (SyncKeepAlive); also asks once
+        // to show its notification, which Android 13 and later hide without.
+        MethodChannel(messenger, "pocket_amp/sync")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "keepAlive") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val on = call.argument<Boolean>("on") == true
+                if (on && Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                    PackageManager.PERMISSION_GRANTED
+                ) {
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFY_REQUEST)
+                }
+                try {
+                    SyncKeepAlive.set(this, on)
+                    result.success(null)
+                } catch (e: Exception) {
+                    // Android refuses a foreground service started from the
+                    // background; the next start from the app tries again.
+                    result.error("keepAlive", e.message, null)
+                }
+            }
         // file_selector has no save dialog on Android: ask the system's own,
         // so the file can go to Downloads, a cloud drive or another app.
         MethodChannel(messenger, "pocket_amp/files")
@@ -56,6 +83,15 @@ class MainActivity : FlutterActivity() {
                     SAVE_REQUEST,
                 )
             }
+    }
+
+    override fun onDestroy() {
+        // Leaving with Back ends the Flutter engine, and with it the sync:
+        // the service must not hold the phone awake for nothing.
+        if (isFinishing) {
+            SyncKeepAlive.set(this, false)
+        }
+        super.onDestroy()
     }
 
     @Deprecated("FlutterActivity is not a ComponentActivity")
@@ -82,5 +118,6 @@ class MainActivity : FlutterActivity() {
 
     private companion object {
         const val SAVE_REQUEST = 4201
+        const val NOTIFY_REQUEST = 4202
     }
 }

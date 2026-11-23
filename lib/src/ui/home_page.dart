@@ -27,12 +27,15 @@ import '../net/capped_http.dart';
 import '../tone3000/tone3000.dart';
 import '../presets/ir_upload.dart';
 import '../presets/nam_file.dart';
+import '../sync/sync_data.dart';
+import '../sync/sync_service.dart';
 import '../telemetry.dart';
 import 'assistant_panel.dart';
 import 'assistant_tools.dart';
 import 'backups_page.dart';
 import 'ble_pair_dialog.dart';
 import 'library_page.dart';
+import 'sync_page.dart';
 import 'tone3000_page.dart';
 import 'onboarding.dart';
 import 'presets_page.dart';
@@ -128,6 +131,7 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       unawaited(_detect());
       unawaited(_loadWithCab());
+      unawaited(_startSync());
       _portWatch = Timer.periodic(const Duration(seconds: 2), (_) {
         unawaited(_watchPorts(backend));
       });
@@ -213,6 +217,7 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
 
   @override
   void dispose() {
+    _sync?.dispose();
     _agent.stop();
     _agent.dispose();
     _portWatch?.cancel();
@@ -953,6 +958,74 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
   );
 
   /// Which AMP slots hold a capture made with its cabinet, for the editor.
+  /// Syncing with the user's other devices; null where the app's folders
+  /// are not at hand (tests).
+  SyncService? _sync;
+
+  Future<void> _startSync() async {
+    try {
+      final Directory root = (await _lib()).root;
+      final SyncService s = SyncService(
+        data: SyncData(
+          library: root,
+          backups: root.parent,
+          details: _workspace.details,
+        ),
+        stateFile: File(
+          '${(await getApplicationSupportDirectory()).path}'
+          '${Platform.pathSeparator}sync.json',
+        ),
+        // The details are live; the library list is read again.
+        onChanged: () {
+          if (mounted) {
+            unawaited(_loadLibrary());
+          }
+        },
+        log: _addLog,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _sync = s);
+      s.addListener(_keepSyncAlive);
+      await s.load();
+    } on MissingPluginException {
+      // no app folders here
+    }
+  }
+
+  static const MethodChannel _syncChannel = MethodChannel('pocket_amp/sync');
+
+  /// Whether Android's keep-alive service runs (null: not asked yet).
+  bool? _syncKept;
+
+  /// On Android, keeps syncing with the screen off while there is a device
+  /// to sync with.
+  Future<void> _keepSyncAlive() async {
+    final SyncService? s = _sync;
+    final bool want = s != null && s.enabled && s.peers.isNotEmpty;
+    if (!Platform.isAndroid || want == _syncKept) {
+      return;
+    }
+    _syncKept = want;
+    try {
+      await _syncChannel.invokeMethod<void>('keepAlive', <String, Object>{
+        'on': want,
+      });
+    } on PlatformException catch (e) {
+      _syncKept = null; // try again on the next change
+      _addLog('Sync cannot stay on with the screen off: ${e.message}');
+    }
+  }
+
+  void _openSync() {
+    final SyncService? s = _sync;
+    if (s != null) {
+      Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => SyncPage(service: s)));
+    }
+  }
+
   Future<void> _loadWithCab() async {
     try {
       _workspace.ampWithCab = await (await _lib()).ampSlotsWithCab();
@@ -1646,6 +1719,12 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
               onPressed: _busy ? null : _pairBluetooth,
               icon: const Icon(Icons.bluetooth_searching),
             ),
+          if (_sync != null)
+            IconButton(
+              tooltip: 'Sync devices',
+              onPressed: _openSync,
+              icon: const Icon(Icons.devices),
+            ),
           const SizedBox(width: 4),
         ],
         if (Telemetry.available)
@@ -1675,6 +1754,12 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
                       leadingIcon: const Icon(Icons.bluetooth_searching),
                       onPressed: _busy ? null : _pairBluetooth,
                       child: const Text('Pair over Bluetooth'),
+                    ),
+                  if (_sync != null)
+                    MenuItemButton(
+                      leadingIcon: const Icon(Icons.devices),
+                      onPressed: _openSync,
+                      child: const Text('Sync devices'),
                     ),
                 ]
               : const <Widget>[],
