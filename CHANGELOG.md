@@ -2,6 +2,22 @@
 
 What changed in each release, for people who use the app. The commit-level list of every release is on the [releases page](https://github.com/vitoramaral10/pocket-amp-tools/releases).
 
+## [0.7.0](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.6.0...v0.7.0) (2026-11-23)
+
+
+### Features
+
+* **app:** tell users when a newer version is out ([2c455c7](https://github.com/vitoramaral10/pocket-amp-tools/commit/2c455c702457fd1f13b7c46f0ca83c1b9344af3d))
+* **firmware:** say on its own when the pedal is up to date ([9e3f669](https://github.com/vitoramaral10/pocket-amp-tools/commit/9e3f6691e6047bcfd8a957e7a9e6ddbe49f25a27))
+* **sync:** keep paired devices in sync on the local network ([8d20a7e](https://github.com/vitoramaral10/pocket-amp-tools/commit/8d20a7e13e4bc0607c29b48310a1985e60a605dc))
+
+
+### Bug Fixes
+
+* **library:** show each TONE3000 tone's picture, smoothly ([db53afa](https://github.com/vitoramaral10/pocket-amp-tools/commit/db53afae2e0ff8a6fc238d2bc31b9eb8b16f90c2))
+* **library:** show the first slot's name whole ([c823421](https://github.com/vitoramaral10/pocket-amp-tools/commit/c8234214f16c985932326612e000762c1086ee38))
+* **linux:** match the window to its desktop entry ([24b93ad](https://github.com/vitoramaral10/pocket-amp-tools/commit/24b93adccc69573dbbdda06c995e2748c2a75ee5))
+
 ## [0.6.0](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.5.0...v0.6.0) (2026-11-22)
 
 
