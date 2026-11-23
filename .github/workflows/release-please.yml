@@ -16,6 +16,8 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      # The tag must be vX.Y.Z: build.yml publishes only for refs/tags/v*,
+      # so release-please-config.json sets include-component-in-tag to false.
       - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         id: rp
 
@@ -33,8 +35,9 @@ jobs:
       # The required check is `test`. A PR opened with GITHUB_TOKEN gets no
       # pull_request run, so run the tests on its branch (without the builds).
       - name: Run the tests on the release PR
-        if: steps.rp.outputs.prs_created == 'true'
+        # `pr` is empty on the run that cuts a release; fromJSON('') fails the job.
+        if: steps.rp.outputs.prs_created == 'true' && steps.rp.outputs.pr != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          BRANCH: ${{ fromJSON(steps.rp.outputs.pr).headBranchName }}
+          BRANCH: ${{ fromJSON(steps.rp.outputs.pr || '{}').headBranchName }}
         run: gh workflow run build.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH" -f build=false

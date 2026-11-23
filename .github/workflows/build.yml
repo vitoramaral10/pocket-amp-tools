@@ -41,7 +41,8 @@ jobs:
   build:
     needs: test
     # PRs only run the tests; the builds run for a tag or by hand.
-    if: github.event_name != 'pull_request' && inputs.build != false
+    # On a tag push inputs.build is null, and null != false is false here.
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.build)
     strategy:
       fail-fast: false
       matrix:
