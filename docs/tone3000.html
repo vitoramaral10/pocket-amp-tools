@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TONE3000 captures and IRs on the Pocket AMP, inside the app · Pocket AMP Tools</title>
+<meta name="description" content="Search TONE3000 and get NAM amp captures and IRs for the M-VAVE or Donner Pocket AMP, Coolmusic PIXIE1 or New Bee SK17 without leaving Pocket AMP Tools: sign in, browse, get, send to a slot.">
+<link rel="canonical" href="https://vitoramaral10.github.io/pocket-amp-tools/tone3000.html">
+<link rel="alternate" hreflang="en" href="https://vitoramaral10.github.io/pocket-amp-tools/tone3000.html">
+<link rel="alternate" hreflang="pt-BR" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/tone3000.html">
+<link rel="alternate" hreflang="x-default" href="https://vitoramaral10.github.io/pocket-amp-tools/tone3000.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="TONE3000 captures and IRs on the Pocket AMP, inside the app">
+<meta property="og:description" content="Search TONE3000 and send its NAM captures and IRs to your Pocket AMP's slots with a free, open source app.">
+<meta property="og:url" content="https://vitoramaral10.github.io/pocket-amp-tools/tone3000.html">
+<meta property="og:image" content="https://vitoramaral10.github.io/pocket-amp-tools/tone3000-dark.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="wrap nav" aria-label="Site">
+  <a href="./">Home</a>
+  <a href="tone3000.html" aria-current="page">TONE3000</a>
+  <a href="ir-nam.html">IRs and NAM captures</a>
+  <a href="sync.html">Sync devices</a>
+  <a href="firmware-update.html">Firmware update guide</a>
+  <a href="pt-br/tone3000.html" lang="pt-BR" hreflang="pt-BR">Português</a>
+</nav>
+<main>
+  <header class="wrap">
+    <div class="grid">
+      <div>
+        <p class="eyebrow">Guide · TONE3000</p>
+        <h1>TONE3000 captures and IRs, inside the app</h1>
+        <p class="lead prose"><a href="https://www.tone3000.com">TONE3000</a> is where guitarists share free NAM captures of amps and pedals, and IRs of cabinets. Pocket AMP Tools shows it right in the Library: find a sound, get it, and send it to one of the pedal's 20 AMP or 20 CAB slots, without downloading and converting files by hand.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://github.com/vitoramaral10/pocket-amp-tools/releases/latest">Download the app</a>
+          <a class="btn btn-secondary" href="https://www.tone3000.com">tone3000.com</a>
+        </div>
+        <p class="note">Version 0.6.0 or newer. Free TONE3000 account and an internet connection needed. Pocket AMP Tools is a community tool, not affiliated with TONE3000 or any brand of the pedal.</p>
+      </div>
+      <picture>
+        <source srcset="tone3000-dark.png" media="(prefers-color-scheme: dark)">
+        <img class="shot" src="tone3000-light.png" width="2200" height="1520" alt="The TONE3000 window in Pocket AMP Tools: the TONE3000 logo, a search box, the Trending, Latest, Favorites, Downloaded and Mine lists, and tones with their creator, kind and license, each with a Get button (example tones)">
+      </picture>
+    </div>
+  </header>
+
+  <article class="wrap">
+    <div class="prose">
+      <h2>Get a capture, step by step</h2>
+      <ol>
+        <li>Open the <strong>Library</strong> section. Above your amp files, click <strong>Get captures from TONE3000</strong>; above your IRs (the <strong>Cabinets</strong> tab), <strong>Get IRs from TONE3000</strong>.</li>
+        <li>The first time, click <strong>Sign in with TONE3000</strong>. The app opens tone3000.com in your browser with a short code; approve it there with your account. The app never sees your password.</li>
+        <li>Browse <strong>Trending</strong>, <strong>Latest</strong>, <strong>Favorites</strong>, <strong>Downloaded</strong> or <strong>Mine</strong>, or type an amp, a pedal or a creator in the search box: it looks through all of TONE3000.</li>
+        <li>Click <strong>Get</strong> on a tone. If it holds several captures (clean, crunch, lead…), pick one.</li>
+        <li>The file lands in your library, checked like any other. Click <strong>Send to pedal…</strong> on it and pick a slot.</li>
+        <li>In the <strong>Presets</strong> section, choose the new model in the AMP or CAB block. You hear it live.</li>
+      </ol>
+
+      <h2>Only what the pedal can play</h2>
+      <p>The pedal runs one small, fixed network for its amps, and an <strong>A2</strong> capture already contains it. So when you get captures, the lists and the search show only A2 NAM tones; when you get IRs, only IR tones. A line under the list says how many tones were left out, so nothing disappears without a word.</p>
+      <p>IRs on TONE3000 come in many shapes. The app converts each one to the format the pedal takes (44.1 kHz, mono, 24-bit, 2048 samples) as it adds it, and keeps a file already in that format byte for byte. More on both in the <a href="ir-nam.html">IR and NAM guide</a>.</p>
+
+      <h2>Captures with their cabinet</h2>
+      <p>Many tones on TONE3000 are an amp captured together with its cabinet, marked <em>amp-cab</em> (or a whole rig). Played through the pedal's own CAB block, they would go through two cabinets and sound boxy. The app remembers which captures those are, and turns the CAB block off when you pick one in the editor, and in the presets that already play its slot when you send it. As with any edit, nothing is stored until you write the presets. A <code>.nam</code> you add yourself is recognized too when its file says it holds a cabinet.</p>
+
+      <h2>Creators and licenses</h2>
+      <p>Every tone shows who made it, what was captured and its license, and the arrow next to <strong>Get</strong> opens its page on tone3000.com, where you can like it, read its notes and see how to credit it. Captures are the work of their creators: respect the license if you share a recording or a preset made with one.</p>
+
+      <h2>Your account and privacy</h2>
+      <ul>
+        <li>You sign in on tone3000.com itself (OAuth device sign-in). The app gets a key to your account, never your password.</li>
+        <li>The key stays on your device, readable only by you on Linux and macOS, until you click <strong>Sign out</strong>. It is not synced to your other devices.</li>
+        <li>Nothing is downloaded until you click <strong>Get</strong>, and files are not kept anywhere but your library.</li>
+      </ul>
+
+      <h2>Questions</h2>
+      <details><summary>Do I need a TONE3000 account?</summary>
+        <p>Yes, a free one: the lists, the search and the downloads are those of your account. You can still add <code>.nam</code> and WAV files you got any other way with <strong>Add .nam files…</strong> and <strong>Add WAV files…</strong>.</p></details>
+      <details><summary>Why are some tones missing from the lists?</summary>
+        <p>They are not A2 captures (or, for IRs, not IRs), so the pedal cannot play them. A1 and other NAM files would have to be retrained to the pedal's network, which the app does not do.</p></details>
+      <details><summary>Does it work on my phone?</summary>
+        <p>Yes, on Android the window fills the screen, and the sign-in link opens in the phone's browser with one tap. With <a href="sync.html">sync</a> on, what you get on the phone shows up in the library of your computer too.</p></details>
+      <details><summary>Can I send to the pedal over Bluetooth?</summary>
+        <p>The app can, on Android and Linux, but sending a capture or an IR over the radio was not yet tried on a pedal: use the USB cable for the library if you can, and <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">tell us</a> if Bluetooth worked for you.</p></details>
+      <details><summary>I build the app myself. Do I need my own TONE3000 key?</summary>
+        <p>A fork that wants its own builds with <code>--dart-define=TONE3000_CLIENT_ID=...</code>; the official key is public and works out of the box.</p></details>
+    </div>
+  </article>
+</main>
+<footer class="wrap">
+  <p class="prose">Pocket AMP Tools is open source (GPL-3.0). Found a problem? <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">Tell us on GitHub</a>. Powered by <a href="https://www.tone3000.com">TONE3000</a>. M-VAVE, Pocket AMP, Donner, Coolmusic PIXIE1, New Bee SK17 and TONE3000 are trademarks of their owners.</p>
+</footer>
+</body>
+</html>

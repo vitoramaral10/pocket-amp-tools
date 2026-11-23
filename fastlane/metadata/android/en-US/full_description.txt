@@ -4,14 +4,16 @@ Edit the presets and update the firmware of the <b>Pocket AMP</b> guitar pedal f
 <ul>
 <li>Edits the 80 presets: volume, signal chain, each block's model and knobs, and the EQ. Every change is heard live on the pedal.</li>
 <li>Gives each preset a name, labels and a rating, and filters the list by them.</li>
-<li>Sends your own cabinet IRs (WAV) to the 20 CAB slots and amp captures (A2 .nam files) to the 20 AMP slots.</li>
+<li>Brings TONE3000 inside the app: search it, browse what is trending, your favorites and downloads, and get an A2 amp capture or an IR into the library with one tap. Captures made with their cabinet turn the CAB block off on their own.</li>
+<li>Sends cabinet IRs (WAV in any shape, converted for the pedal) to the 20 CAB slots and amp captures (A2 .nam files) to the 20 AMP slots.</li>
+<li>Keeps your phone and computer in sync: pair them once, and while the app is open on both, on the same network, the library, backups and preset notes follow each other. No account or server, encrypted end to end.</li>
 <li>Backs up and restores presets as plain JSON files.</li>
 <li>Updates the pedal with M-VAVE's official firmware file, after a backup of your presets.</li>
 <li>Optional assistant: describe a sound and an AI service you choose (any OpenAI-compatible address, your own key) edits the preset.</li>
 </ul>
 
 <b>Network</b>
-The app goes online only for what you ask or allow: <i>Download from M-VAVE</i> fetches the firmware file from M-VAVE's server, the assistant talks to the address you configure, and error reports go to Sentry only if you agree when the app asks (off by default).
+The app goes online only for what you ask or allow: opening the Firmware section with the pedal on USB, or <i>Download from M-VAVE</i>, fetches the firmware file from M-VAVE's server to tell whether the pedal is up to date; the TONE3000 window talks to tone3000.com once you sign in there; sync talks only to your own paired devices on your local network; the assistant talks to the address you configure; and error reports go to Sentry only if you agree when the app asks (off by default).
 
 <b>Limits on Android</b>
 Over Bluetooth (pair the pedal once with <i>Pair over Bluetooth</i>) you can read, edit and write presets and send IRs and captures; firmware updates need the USB cable. The pedal firmware is M-VAVE's and is not free software.

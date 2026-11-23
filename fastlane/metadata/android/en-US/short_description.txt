@@ -1,1 +1,1 @@
-Preset editor and firmware updater for the Pocket AMP guitar pedal, any brand
+Preset editor, TONE3000 captures and firmware updater for the Pocket AMP

@@ -1,0 +1,5 @@
+* TONE3000 inside the app: search, browse and get A2 captures and IRs.
+* Sync your phone and computer on your own network: library, backups and preset notes, encrypted, no account.
+* Any WAV IR is converted for the pedal; captures with their cabinet turn the CAB block off.
+* The Firmware section says on its own when the pedal is up to date.
+* The first slot's name shows whole.

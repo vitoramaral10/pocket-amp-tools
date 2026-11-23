@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Keep your phone and computer in sync · Pocket AMP Tools</title>
+<meta name="description" content="Pair your phone and computer once and Pocket AMP Tools keeps the Pocket AMP library, preset backups and preset notes the same on both, on your own network, encrypted, with no account or server.">
+<link rel="canonical" href="https://vitoramaral10.github.io/pocket-amp-tools/sync.html">
+<link rel="alternate" hreflang="en" href="https://vitoramaral10.github.io/pocket-amp-tools/sync.html">
+<link rel="alternate" hreflang="pt-BR" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/sincronizar.html">
+<link rel="alternate" hreflang="x-default" href="https://vitoramaral10.github.io/pocket-amp-tools/sync.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Keep your phone and computer in sync">
+<meta property="og:description" content="Your Pocket AMP library, backups and preset notes on every device, synced on your own network with no account or server.">
+<meta property="og:url" content="https://vitoramaral10.github.io/pocket-amp-tools/sync.html">
+<meta property="og:image" content="https://vitoramaral10.github.io/pocket-amp-tools/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="wrap nav" aria-label="Site">
+  <a href="./">Home</a>
+  <a href="tone3000.html">TONE3000</a>
+  <a href="ir-nam.html">IRs and NAM captures</a>
+  <a href="sync.html" aria-current="page">Sync devices</a>
+  <a href="firmware-update.html">Firmware update guide</a>
+  <a href="pt-br/sincronizar.html" lang="pt-BR" hreflang="pt-BR">Português</a>
+</nav>
+<main>
+  <header class="wrap">
+    <p class="eyebrow">Guide · Sync devices</p>
+    <h1>Keep your phone and computer in sync</h1>
+    <p class="lead prose">Get a capture on the phone at rehearsal and find it on the computer at home. Pocket AMP Tools keeps your devices the same by itself, talking to each other directly on your network: no account, no server, no cloud.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="https://github.com/vitoramaral10/pocket-amp-tools/releases/latest">Download the app</a>
+    </div>
+    <p class="note">Version 0.7.0 or newer on every device. Windows, macOS, Linux and Android.</p>
+  </header>
+
+  <article class="wrap">
+    <div class="prose">
+      <h2>Pair two devices</h2>
+      <ol>
+        <li>Open the app on both, on the same Wi-Fi or network.</li>
+        <li>On each, open <strong>Sync devices</strong>: the devices button at the top of the window, or the menu (⋮) on a phone. Turn on <strong>Keep my devices in sync</strong>.</li>
+        <li>After a few seconds each device lists the other under <strong>Other devices on this network</strong>. Click <strong>Pair</strong> on one of them.</li>
+        <li>Both screens show the same six-digit code. Check that it matches and click <strong>Codes match</strong> on both.</li>
+      </ol>
+      <p>That is needed once per pair of devices. To add a third device, pair it with each of the others the same way.</p>
+
+      <h2>What syncs, and what does not</h2>
+      <table>
+        <thead><tr><th scope="col">Syncs</th><th scope="col">Stays on each device</th></tr></thead>
+        <tbody>
+          <tr><td>The library: amp captures, IRs, and which file went to which slot</td><td>The assistant's key and settings</td></tr>
+          <tr><td>Preset backups</td><td>The TONE3000 sign-in</td></tr>
+          <tr><td>Preset names, descriptions, labels and ratings</td><td>Error-report consent and the app's settings</td></tr>
+        </tbody>
+      </table>
+      <p>The presets themselves live in the pedal, so each device reads them from it. After pairing, the devices sync a few seconds after any change, with no button to press. The last edit of each item wins, and deleting a file on one device deletes it on the others.</p>
+
+      <h2>When it syncs</h2>
+      <p>Whenever the app is open on both devices, on the same network. With the app closed nothing syncs, and the next time both are open they catch up. On Android a notification stays up while sync is on, so the phone keeps syncing with the screen off; it goes away when you close the app from the recent apps.</p>
+
+      <h2>Private by design</h2>
+      <ul>
+        <li>The devices talk directly to each other; nothing goes through the internet or anyone's server.</li>
+        <li>Everything is encrypted end to end (X25519 and ChaCha20-Poly1305). The six-digit check makes sure no other device on the network sits in the middle while pairing.</li>
+        <li>A device that was never paired gets nothing, and what arrives is checked like a file you add yourself.</li>
+      </ul>
+
+      <h2>If the devices do not see each other</h2>
+      <ul>
+        <li><strong>Linux:</strong> a firewall such as ufw or firewalld blocks other devices. The Sync page says so and <strong>Let sync through</strong> opens the port to home and office networks only (private addresses), after the system asks for your password. Any other firewall needs port <strong>47913</strong> (TCP and UDP) allowed by hand.</li>
+        <li><strong>Windows and macOS</strong> ask once whether the app may use the network: allow it.</li>
+        <li><strong>Guest and office Wi-Fi</strong> often keep devices apart. Try your home network or the phone's hotspot.</li>
+        <li>Both devices need the app open with <strong>Keep my devices in sync</strong> on, and the same version of the app.</li>
+      </ul>
+
+      <h2>Questions</h2>
+      <details><summary>Do I need an account?</summary>
+        <p>No. Pairing is between your devices, and nothing is stored anywhere else.</p></details>
+      <details><summary>What happens if I edit the same preset note on two devices?</summary>
+        <p>The later edit wins when they sync. The clocks of the devices decide what is later, so keep them on automatic time.</p></details>
+      <details><summary>How do I stop syncing with a device?</summary>
+        <p>Click the unlink button next to it under <strong>Paired devices</strong> and confirm. Nothing is deleted on either device; forget it on the other one too, or pair them again later.</p></details>
+    </div>
+  </article>
+</main>
+<footer class="wrap">
+  <p class="prose">Pocket AMP Tools is open source (GPL-3.0). Found a problem? <a href="https://github.com/vitoramaral10/pocket-amp-tools/issues/new/choose">Tell us on GitHub</a>. M-VAVE, Pocket AMP, Donner, Coolmusic PIXIE1 and New Bee SK17 are trademarks of their owners.</p>
+</footer>
+</body>
+</html>

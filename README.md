@@ -6,7 +6,7 @@
 [![license](https://img.shields.io/github/license/vitoramaral10/pocket-amp-tools)](LICENSE)
 ![platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-informational)
 
-A free, open-source app to **edit the presets, manage the IRs and amp captures, back up and update the firmware** of the **Pocket AMP** guitar pedal, on **Windows, macOS, Linux and Android**.
+A free, open-source app to **edit the presets, get amp captures and IRs from TONE3000, manage your own, back up and update the firmware** of the **Pocket AMP** guitar pedal, on **Windows, macOS, Linux and Android**, with your devices kept in sync.
 
 It works with the pedal whatever brand is printed on it: **M-VAVE Pocket AMP**, **Donner Pocket AMP**, **Coolmusic PIXIE1**, **New Bee SK17** and others. Website: <https://vitoramaral10.github.io/pocket-amp-tools/>
 
@@ -21,16 +21,19 @@ It works with the pedal whatever brand is printed on it: **M-VAVE Pocket AMP**, 
 - **Names, tags and ratings** for your presets, with a filter, and keyboard shortcuts for everything.
 - **Optional AI assistant**, on a service and key of your choice: ask for a sound and it edits the preset for you.
 - **Sync between your devices.** Pair your phone and computer once; while the app is open on both, on the same network, the library, backups and preset notes stay the same on each, by themselves. No account, no server. [More](#sync-between-devices)
-- **Library for IRs and amp captures.** Send your own IRs and [TONE3000](https://www.tone3000.com) A2 `.nam` captures to the pedal's 20 CAB and 20 AMP slots, and see which file is in which slot. [More](#presets)
+- **[TONE3000](https://www.tone3000.com) inside the app.** Search TONE3000, browse what is trending, your favorites and downloads, and get an A2 capture or an IR into the library with one click. Captures made with their cabinet turn the pedal's CAB block off on their own. [More](#presets) · [Guide](https://vitoramaral10.github.io/pocket-amp-tools/tone3000.html)
+- **Library for IRs and amp captures.** Send IRs and A2 `.nam` captures to the pedal's 20 CAB and 20 AMP slots, and see which file is in which slot. A WAV in any shape is converted for the pedal. [More](#presets)
 - **Bluetooth** editing on Linux and Android. [More](#bluetooth-linux-and-android)
 - **Backups you can read.** Every preset is saved as plain JSON that you can edit by hand and restore. One is taken automatically before each firmware update.
-- **Firmware update.** Fetches the current firmware from M-VAVE (V1.05) and installs it over plain USB-MIDI, with no drivers. [More](#how-to-update)
+- **Firmware update.** Fetches the current firmware from M-VAVE (V1.05) and installs it over plain USB-MIDI, with no drivers, and says on its own when your pedal is already up to date. [More](#how-to-update)
+- **Tells you about new versions** of the app, once a day at most. [More](#new-versions)
 
 ## Why use it instead of M-VAVE's software
 
 - **Your sounds are yours.** Presets live in open, documented files on your computer, not only inside the pedal.
 - **You can tell your presets apart.** Give each preset a name, a description, genres, tags and a 1 to 5 star rating, then filter the list by them. In M-VAVE's software a preset is only a number, P01 to P80.
 - **It runs where the official software does not.** M-VAVE's firmware updater runs only on Windows; this app runs on macOS, Linux and Android too ([what was tested on each](#status)). On Android it also runs on 32-bit devices that M-VAVE's app does not install on.
+- **Thousands of amps and cabinets, one click away.** TONE3000's captures and IRs open inside the app, filtered to what the pedal can play, instead of downloading, checking and converting files by hand.
 - **It installs the current firmware.** At the time of writing, M-VAVE's "POCKET AMP" updater bundle ships an older firmware than the one on its own downloads page. This app downloads the current official file.
 - **Updating is safer for your presets.** A firmware update can overwrite presets and their EQ. The app backs them all up first and restores the ones that changed afterwards, and it can resume an update that stopped halfway.
 - **It refuses to do harm.** The firmware package, the pedal's identity and every packet sent are checked before anything is written. [See the safety checks](#safety-checks)
@@ -213,6 +216,7 @@ Reports are very welcome, including "it worked": use the [hardware test report](
 This is a community project and the next step depends on owners of the pedal:
 
 - **Android testers.** Detection over a USB OTG cable, sending an IR or a capture over Bluetooth and a firmware update from a phone are still unreported.
+- **Sync testers.** Sync was tried between Linux and Android; Windows, macOS, and a phone syncing with its screen off for a long while are still unreported.
 - **Windows and macOS testers, especially with an M-VAVE Pocket AMP.** So far only pedals of other brands have been updated on those systems. Open the app with your pedal connected and [tell us what you see](../../issues/new?template=hardware_report.yml). Detection alone is already useful.
 - **Bug reports** with the log from **⋮ → Settings → Copy for a bug report** ([form](../../issues/new?template=bug_report.yml)).
 - **Questions, tips and other pedals** go to [Discussions](../../discussions).

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Pocket AMP editor and firmware update: M-VAVE, Donner, PIXIE1, SK17 · Pocket AMP Tools</title>
-<meta name="description" content="Free, open source app for the Pocket AMP guitar pedal, whatever brand is on it: M-VAVE, Donner, Coolmusic PIXIE1 or New Bee SK17. Edit presets live, load your own IRs and NAM captures, back up, and update the firmware to V1.05 from macOS, Linux, Windows or Android.">
+<meta name="description" content="Free, open source app for the Pocket AMP guitar pedal, whatever brand is on it: M-VAVE, Donner, Coolmusic PIXIE1 or New Bee SK17. Edit presets live, get NAM captures and IRs from TONE3000 inside the app, keep your phone and computer in sync, back up, and update the firmware to V1.05 from macOS, Linux, Windows or Android.">
 <link rel="canonical" href="https://vitoramaral10.github.io/pocket-amp-tools/">
 <link rel="alternate" hreflang="en" href="https://vitoramaral10.github.io/pocket-amp-tools/">
 <link rel="alternate" hreflang="pt-BR" href="https://vitoramaral10.github.io/pocket-amp-tools/pt-br/">
@@ -25,10 +25,10 @@
     {
       "@type": "SoftwareApplication",
       "name": "Pocket AMP Tools",
-      "description": "Preset editor, IR and amp capture library, backups and firmware updater for the Pocket AMP guitar pedal, sold as the M-VAVE Pocket AMP, Donner Pocket AMP, Coolmusic PIXIE1 and New Bee SK17.",
+      "description": "Preset editor, IR and amp capture library with TONE3000 built in, device sync, backups and firmware updater for the Pocket AMP guitar pedal, sold as the M-VAVE Pocket AMP, Donner Pocket AMP, Coolmusic PIXIE1 and New Bee SK17.",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "Windows 10, Windows 11, macOS 11+, Linux, Android 8+",
-      "softwareVersion": "0.5.0",
+      "softwareVersion": "0.7.0",
       "license": "https://www.gnu.org/licenses/gpl-3.0.html",
       "offers": {
         "@type": "Offer",
@@ -79,7 +79,23 @@
           "name": "Can I load my own IRs and NAM amp captures?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Yes. The Library section sends a WAV impulse response (44.1 kHz, mono, 24-bit, 2048 samples) to any of the 20 CAB slots and an A2 .nam capture from TONE3000 to any of the 20 AMP slots, and remembers which file went to which slot."
+            "text": "Yes. The Library section sends an impulse response to any of the 20 CAB slots and an A2 .nam capture to any of the 20 AMP slots, and remembers which file went to which slot. A WAV in any shape is converted to the one the pedal takes (44.1 kHz, mono, 24-bit, 2048 samples) when it is added."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I get captures and IRs from TONE3000 without leaving the app?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Sign in with your TONE3000 account by approving a code on tone3000.com; the app never sees your password. Then browse what is trending and latest, your favorites, downloads and your own tones, or search all of TONE3000, and Get puts the A2 capture or IR in the library, ready to send to a slot."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can my phone and my computer share the library?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Pair them once on the Sync page by checking the same six-digit code on both. While the app is open on both, on the same network, the library, backups and preset names, notes and ratings stay the same on each, by themselves. No account or server; everything is encrypted between the two devices."
           }
         },
         {
@@ -124,8 +140,10 @@
 <body>
 <nav class="wrap nav" aria-label="Site">
   <a href="./" aria-current="page">Home</a>
-  <a href="firmware-update.html">Firmware update guide</a>
+  <a href="tone3000.html">TONE3000</a>
   <a href="ir-nam.html">IRs and NAM captures</a>
+  <a href="sync.html">Sync devices</a>
+  <a href="firmware-update.html">Firmware update guide</a>
   <a href="pt-br/" lang="pt-BR" hreflang="pt-BR">Português</a>
 </nav>
 <main>
@@ -134,7 +152,7 @@
       <div>
         <p class="eyebrow">For every Pocket AMP · free and open source</p>
         <h1>Edit and update your Pocket AMP, whatever brand is on it</h1>
-        <p class="lead prose">Pocket AMP Tools edits the 80 presets live on the pedal, loads your own IRs and amp captures, keeps backups and installs the official firmware (currently V1.05) over plain USB, without drivers.</p>
+        <p class="lead prose">Pocket AMP Tools edits the 80 presets live on the pedal, brings <a href="tone3000.html">TONE3000</a>'s amp captures and IRs into the app, loads your own files, keeps your phone and computer in sync and installs the official firmware (currently V1.05) over plain USB, without drivers.</p>
         <div class="actions">
           <a class="btn btn-primary" href="https://github.com/vitoramaral10/pocket-amp-tools/releases">Download</a>
           <a class="btn btn-secondary" href="https://github.com/vitoramaral10/pocket-amp-tools">Source on GitHub</a>
@@ -155,14 +173,18 @@
       <ul class="features prose">
         <li><h3>Preset editor, heard live</h3>
           <p>Volume, signal chain, every block's model and knobs, and the EQ. Each change plays on the pedal as you make it, and nothing is stored until you write it.</p></li>
+        <li><h3>TONE3000 inside the app</h3>
+          <p>Search TONE3000, browse what is trending, your favorites and downloads, and get an A2 capture or an IR into the library with one click. <a href="tone3000.html">How it works</a></p></li>
         <li><h3>Your own IRs and amp captures</h3>
-          <p>The library sends WAV impulse responses to the 20 CAB slots and A2 <code>.nam</code> captures to the 20 AMP slots, and remembers which file is where.</p></li>
+          <p>The library sends impulse responses to the 20 CAB slots and A2 <code>.nam</code> captures to the 20 AMP slots, and remembers which file is where. A WAV in any shape is converted for the pedal. <a href="ir-nam.html">Guide</a></p></li>
         <li><h3>Names, ratings and filters</h3>
           <p>Give each preset a name, a description, labels and stars, then filter the list. Keyboard shortcuts cover the whole editor.</p></li>
         <li><h3>Backups you can read</h3>
           <p>A backup is a plain JSON file with every knob by name, and carries each preset's name, labels and rating too. One is taken before each firmware update.</p></li>
         <li><h3>Firmware update with a safety net</h3>
-          <p>The official file from M-VAVE, checked before it is sent, with your presets backed up first and restored after.</p></li>
+          <p>The official file from M-VAVE, checked before it is sent, with your presets backed up first and restored after. The app tells you on its own when your pedal is already up to date, and when a new version of the app is out.</p></li>
+        <li><h3>Phone and computer in step</h3>
+          <p>Pair your devices once; while the app is open on both, the library, backups and preset notes follow each other on your network. No account, no server. <a href="sync.html">How it works</a></p></li>
         <li><h3>On your phone, over Bluetooth</h3>
           <p>On Android and Linux the editor also works over Bluetooth. Firmware updates need the cable.</p></li>
         <li><h3>An assistant, if you want one</h3>
@@ -171,6 +193,26 @@
       <picture>
         <source srcset="screenshot-phone-dark.png" media="(prefers-color-scheme: dark)">
         <img class="phone" src="screenshot-phone-light.png" width="720" height="1560" loading="lazy" alt="Pocket AMP Tools on a phone: a preset with its name and rating, the signal chain and the knobs of the AMP block">
+      </picture>
+    </div>
+  </section>
+
+  <section class="wrap">
+    <h2>TONE3000, inside the app</h2>
+    <div class="grid">
+      <div class="prose">
+        <p><a href="https://www.tone3000.com">TONE3000</a> is where guitarists share free NAM captures of amps and pedals, and IRs of cabinets. Pocket AMP Tools shows it in the Library: sign in once by approving a code on tone3000.com, then search for an amp, a pedal or a creator, or browse what is trending, the latest, your favorites, your downloads and your own tones.</p>
+        <ul>
+          <li>Only what the pedal can play is listed: A2 captures for the AMP slots, IRs for the CAB slots.</li>
+          <li><strong>Get</strong> puts it in your library, checked like any file, ready to send to a slot.</li>
+          <li>Captures made with their cabinet (<em>amp-cab</em>) turn the pedal's CAB block off, so the sound does not go through two cabinets.</li>
+          <li>Each tone shows its creator and license, and opens on tone3000.com with one click.</li>
+        </ul>
+        <p><a class="btn btn-secondary" href="tone3000.html">The TONE3000 guide</a></p>
+      </div>
+      <picture>
+        <source srcset="tone3000-phone-dark.png" media="(prefers-color-scheme: dark)">
+        <img class="phone" src="tone3000-phone-light.png" width="1170" height="2532" loading="lazy" alt="TONE3000 inside Pocket AMP Tools on a phone: the search box, the Trending, Latest, Favorites, Downloaded and Mine lists, and tones with their creator, kind and license, each with a Get button (example tones)">
       </picture>
     </div>
   </section>
@@ -225,7 +267,11 @@
       <details><summary>Will the update erase my presets?</summary>
         <p>A firmware update can overwrite some presets and their EQ. The app backs up all 80 presets and their EQ before updating, and restores only what changed. You can also save a backup to a file at any time.</p></details>
       <details><summary>Can I load my own IRs and NAM amp captures?</summary>
-        <p>Yes. The <strong>Library</strong> section sends a WAV impulse response (44.1 kHz, mono, 24-bit, 2048 samples) to any of the 20 CAB slots, and an A2 <code>.nam</code> capture from TONE3000 to any of the 20 AMP slots. The pedal cannot give a file back, so the app remembers which one went to which slot.</p></details>
+        <p>Yes. The <strong>Library</strong> section sends an impulse response to any of the 20 CAB slots and an A2 <code>.nam</code> capture to any of the 20 AMP slots. A WAV in any shape (another sample rate, stereo, 16-bit, longer) is converted to the one the pedal takes when you add it. The pedal cannot give a file back, so the app remembers which one went to which slot. <a href="ir-nam.html">The IR and NAM guide</a> has the details.</p></details>
+      <details><summary>Can I get captures and IRs from TONE3000 without leaving the app?</summary>
+        <p>Yes. In the <strong>Library</strong>, <strong>Get captures from TONE3000</strong> (or <strong>Get IRs from TONE3000</strong>) signs you in by approving a code on tone3000.com, so the app never sees your password. Then search all of TONE3000 or browse the lists, and <strong>Get</strong> puts the file in your library. <a href="tone3000.html">The TONE3000 guide</a></p></details>
+      <details><summary>Can my phone and my computer share the library?</summary>
+        <p>Yes. Pair them once on the <strong>Sync devices</strong> page by checking the same six-digit code on both screens. While the app is open on both, on the same network, the library, backups and preset names, notes and ratings stay the same on each, by themselves. No account or server: the devices talk to each other, encrypted. <a href="sync.html">How sync works</a></p></details>
       <details><summary>Does it work on Android or over Bluetooth?</summary>
         <p>Yes. On Android 8 or newer and on Linux the app reaches the pedal over Bluetooth to read, edit and write presets. Firmware updates always need the USB cable (an OTG cable on a phone). Windows and macOS use USB only.</p></details>
       <details><summary>Do I need a driver?</summary>

@@ -23,8 +23,10 @@
 <body>
 <nav class="wrap nav" aria-label="Site">
   <a href="./">Início</a>
-  <a href="atualizar-firmware.html" aria-current="page">Atualizar o firmware</a>
+  <a href="tone3000.html">TONE3000</a>
   <a href="ir-nam.html">IRs e capturas NAM</a>
+  <a href="sincronizar.html">Sincronizar aparelhos</a>
+  <a href="atualizar-firmware.html" aria-current="page">Atualizar o firmware</a>
   <a href="../firmware-update.html" lang="en" hreflang="en">English</a>
 </nav>
 <main>
@@ -63,7 +65,7 @@
       <ol>
         <li>Conecte o pedal com o cabo de dados e ligue.</li>
         <li>Abra o Pocket AMP Tools. Ele detecta o pedal e mostra a versão instalada.</li>
-        <li>Abra a seção <strong>Firmware</strong> e clique em <strong>Download from M-VAVE</strong>. O app busca o arquivo oficial atual no servidor da M-VAVE. Se você já tem um arquivo <code>.fwsc</code>, use <strong>Open .fwsc file…</strong>.</li>
+        <li>Abra a seção <strong>Firmware</strong>. Com o pedal no USB, o app busca sozinho o arquivo oficial atual no servidor da M-VAVE e compara com o pedal: se o pedal já roda essa versão, ele mostra <strong>Your pedal is up to date</strong> e não há mais nada a fazer. Se não, ou para buscar de novo, clique em <strong>Download from M-VAVE</strong>. Se você já tem um arquivo <code>.fwsc</code>, use <strong>Open .fwsc file…</strong>.</li>
         <li>Clique em <strong>Update firmware</strong> e confirme. Antes de tudo, o app faz backup dos 80 presets e do EQ de cada um.</li>
         <li>Espere uns dois minutos. O pedal reinicia duas vezes: uma para o modo de atualização, outra para o firmware novo.</li>
         <li>Clique em <strong>Restore my presets from before the update</strong>. Só os presets e o EQ que mudaram são regravados, e o resultado é lido de volta para conferir.</li>
@@ -92,7 +94,7 @@
         <p>Da M-VAVE. O app baixa o arquivo oficial e confere o pacote, a identidade do pedal e cada pacote enviado antes de gravar qualquer coisa. Ele não distribui nem modifica o firmware.</p></details>
 
       <h2>Depois de atualizar</h2>
-      <p>O mesmo app <a href="./">edita os presets ao vivo</a> e <a href="ir-nam.html">carrega os seus IRs e capturas NAM</a> no pedal.</p>
+      <p>O mesmo app <a href="./">edita os presets ao vivo</a>, pega capturas e IRs <a href="tone3000.html">do TONE3000</a>, <a href="ir-nam.html">carrega os seus arquivos</a> no pedal e <a href="sincronizar.html">mantém os seus aparelhos sincronizados</a>. Ele também avisa quando sai uma versão nova do app.</p>
     </div>
   </article>
 </main>
