@@ -5,6 +5,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:path_provider/path_provider.dart';
+
+import '../app_update.dart';
+import '../app_version.dart';
 import '../assistant/assistant.dart';
 import '../assistant/providers.dart';
 import 'editor_settings.dart';
@@ -38,6 +42,16 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
         ),
+        if (updateCheckBuilt)
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: const Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: AppUpdatesCard(),
+              ),
+            ),
+          ),
         if (log != null)
           Center(
             child: ConstrainedBox(
@@ -344,4 +358,68 @@ class LogCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Whether the app tells of new versions of itself.
+class AppUpdatesCard extends StatefulWidget {
+  const AppUpdatesCard({super.key, this.updates});
+
+  /// Where the choice is kept; the app's own file by default.
+  final AppUpdates? updates;
+
+  @override
+  State<AppUpdatesCard> createState() => _AppUpdatesCardState();
+}
+
+class _AppUpdatesCardState extends State<AppUpdatesCard> {
+  AppUpdates? _u;
+  bool? _on;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final AppUpdates u =
+          widget.updates ??
+          AppUpdates(
+            File(
+              '${(await getApplicationSupportDirectory()).path}'
+              '${Platform.pathSeparator}app-update.json',
+            ),
+          );
+      final bool on = await u.enabled();
+      if (mounted) {
+        setState(() {
+          _u = u;
+          _on = on;
+        });
+      }
+    } on Exception {
+      // no app folders here: the switch stays off
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Card.outlined(
+    margin: EdgeInsets.zero,
+    child: SwitchListTile(
+      secondary: const Icon(Icons.system_update_outlined),
+      title: const Text('Tell me when a new version is out'),
+      subtitle: const Text(
+        'You have version $appVersion. Once a day the app asks GitHub which '
+        'version is the latest; nothing about you is sent.',
+      ),
+      value: _on ?? false,
+      onChanged: _u == null
+          ? null
+          : (bool v) async {
+              setState(() => _on = v);
+              await _u!.setEnabled(v);
+            },
+    ),
+  );
 }
