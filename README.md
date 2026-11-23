@@ -220,6 +220,10 @@ This is a community project and the next step depends on owners of the pedal:
 
 If the app helped you, a ⭐ makes it easier for other Pocket AMP owners to find it.
 
+## New versions
+
+Once a day the app asks GitHub which version of Pocket AMP Tools is the latest, and when it is newer than yours a bar at the top says so, with **Get it** (the release page), **Later** and **Skip this version**. Nothing about you is sent; it is the same request as opening the releases page. **Settings** turns it off and shows which version you have. Builds from a store that updates the app itself, such as F-Droid, leave it out (`--dart-define=UPDATE_CHECK=false`).
+
 ## Troubleshooting
 
 - **No pedal found.** Try another cable (many are charge-only) and another USB port. Make sure no other app has the MIDI port open. On Linux your user needs access to `/dev/snd/midi*` (usually the `audio` group or a desktop session).

@@ -13,6 +13,8 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import '../app_update.dart';
+import '../app_version.dart';
 import '../assistant/agent.dart';
 import '../assistant/assistant.dart';
 import '../firmware_package.dart';
@@ -132,6 +134,7 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
       unawaited(_detect());
       unawaited(_loadWithCab());
       unawaited(_startSync());
+      unawaited(_checkAppUpdate());
       _portWatch = Timer.periodic(const Duration(seconds: 2), (_) {
         unawaited(_watchPorts(backend));
       });
@@ -1018,6 +1021,59 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
     }
   }
 
+  /// Tells the user, once a day at most, that a newer app is out.
+  Future<void> _checkAppUpdate() async {
+    if (!updateCheckBuilt) {
+      return;
+    }
+    final AppUpdates u;
+    try {
+      u = AppUpdates(
+        File(
+          '${(await getApplicationSupportDirectory()).path}'
+          '${Platform.pathSeparator}app-update.json',
+        ),
+      );
+    } on MissingPluginException {
+      return; // no app folders here (tests)
+    }
+    final AppRelease? r = await u.check();
+    if (r == null || !mounted) {
+      return;
+    }
+    final ScaffoldMessengerState m = ScaffoldMessenger.of(context);
+    m.showMaterialBanner(
+      MaterialBanner(
+        leading: const Icon(Icons.system_update_outlined),
+        content: Text(
+          'Pocket AMP Tools ${r.version} is out; you have $appVersion. '
+          'Get it where you got this one: the releases page, or your '
+          'package manager.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () {
+              m.hideCurrentMaterialBanner();
+              unawaited(u.skip(r.version));
+            },
+            child: const Text('Skip this version'),
+          ),
+          TextButton(
+            onPressed: m.hideCurrentMaterialBanner,
+            child: const Text('Later'),
+          ),
+          FilledButton.tonal(
+            onPressed: () {
+              m.hideCurrentMaterialBanner();
+              unawaited(openInBrowser(r.url));
+            },
+            child: const Text('Get it'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openSync() {
     final SyncService? s = _sync;
     if (s != null) {
@@ -1766,6 +1822,7 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
           onAbout: () => showAboutDialog(
             context: context,
             applicationName: 'Pocket AMP Tools',
+            applicationVersion: appVersion,
             applicationLegalese:
                 'Community tool, not affiliated with M-VAVE.\n'
                 'GPL-3.0. Update protocol from M-VAVE\'s FM1 Open '
