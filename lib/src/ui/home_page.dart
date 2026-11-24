@@ -311,7 +311,13 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
     final String shown = Telemetry.scrub(line)!;
     Telemetry.log(shown);
     if (mounted) {
-      setState(() => _log.add('$stamp  $shown'));
+      setState(() {
+        _log.add('$stamp  $shown');
+        // Only recent lines matter in a bug report; an open app should not grow forever.
+        if (_log.length > 500) {
+          _log.removeRange(0, _log.length - 500);
+        }
+      });
     }
   }
 
