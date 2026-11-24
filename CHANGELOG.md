@@ -2,6 +2,19 @@
 
 What changed in each release, for people who use the app. The commit-level list of every release is on the [releases page](https://github.com/vitoramaral10/pocket-amp-tools/releases).
 
+## [0.8.0](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.7.0...v0.8.0) (2026-11-24)
+
+
+### Features
+
+* **site:** refresh the look with a sticky bar, wide hero and banded sections ([f8ead9b](https://github.com/vitoramaral10/pocket-amp-tools/commit/f8ead9b56176b8a16a0fdf4138cd6bda20a4b587))
+
+
+### Bug Fixes
+
+* **ble:** drop Android notifications that arrive after the link closed ([fd17a90](https://github.com/vitoramaral10/pocket-amp-tools/commit/fd17a90bff314e0203c5feb3d0a57c9851b85391))
+* **ci:** skip the release PR test run when a release is cut ([60be56a](https://github.com/vitoramaral10/pocket-amp-tools/commit/60be56a5798c1d7825092be65a206d35770fe692))
+
 ## [0.7.0](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.6.0...v0.7.0) (2026-11-23)
 
 
