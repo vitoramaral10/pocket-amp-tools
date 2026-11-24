@@ -178,7 +178,12 @@ class _AndroidSession implements BleGattSession {
     _value = UniversalBle.characteristicValueStream(
       _id,
       _notify,
-    ).listen(_out.add);
+    ).listen((Uint8List v) {
+      // A notification can still be queued after the link-down event closed _out.
+      if (!_out.isClosed) {
+        _out.add(v);
+      }
+    });
     _link = UniversalBle.connectionStream(_id).listen((bool up) {
       if (!up && !_out.isClosed) {
         _out.addError(const BleGattException(BleGattFailure.disconnected));
