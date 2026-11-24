@@ -41,8 +41,10 @@ class _Frames {
   _Frames(this.socket) {
     _sub = socket.listen(
       (Uint8List data) {
-        _buf.add(data);
-        _pump();
+        if (_error == null) {
+          _buf.add(data);
+          _pump();
+        }
       },
       onError: (Object e) => _fail(SyncException('Connection failed: $e')),
       onDone: () => _fail(const SyncException('The other device hung up.')),
@@ -59,26 +61,36 @@ class _Frames {
   final List<Uint8List> _ready = <Uint8List>[];
   Object? _error;
 
+  /// Body length of the frame being received; null until its header is in.
+  int? _need;
+
+  // Copies the buffer only once per header and once per whole frame: copying
+  // it on every chunk made a large frame cost its size squared.
   void _pump() {
-    while (true) {
-      final Uint8List b = _buf.toBytes();
-      if (b.length < 4) {
+    while (_error == null) {
+      if (_need == null) {
+        if (_buf.length < 4) {
+          return;
+        }
+        final Uint8List b = _buf.takeBytes();
+        final int n = ByteData.sublistView(b).getUint32(0);
+        if (n > maxFrame) {
+          _fail(const SyncException('The other device sent too much at once.'));
+          return;
+        }
+        _need = n;
+        _buf.add(Uint8List.sublistView(b, 4));
+      }
+      final int n = _need!;
+      if (_buf.length < n) {
         return;
       }
-      final int n = ByteData.sublistView(b).getUint32(0);
-      if (n > maxFrame) {
-        _fail(const SyncException('The other device sent too much at once.'));
-        return;
-      }
-      if (b.length < 4 + n) {
-        return;
-      }
-      _buf
-        ..clear()
-        ..add(Uint8List.sublistView(b, 4 + n));
-      final Uint8List frame = Uint8List.fromList(
-        Uint8List.sublistView(b, 4, 4 + n),
-      );
+      final Uint8List b = _buf.takeBytes();
+      _need = null;
+      _buf.add(Uint8List.sublistView(b, n));
+      final Uint8List frame = b.length == n
+          ? b
+          : Uint8List.fromList(Uint8List.sublistView(b, 0, n));
       if (_waiting.isNotEmpty) {
         _waiting.removeAt(0).complete(frame);
       } else {
@@ -89,6 +101,7 @@ class _Frames {
 
   void _fail(Object e) {
     _error ??= e;
+    _buf.clear();
     for (final Completer<Uint8List> c in _waiting) {
       c.completeError(e);
     }
