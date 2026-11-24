@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
