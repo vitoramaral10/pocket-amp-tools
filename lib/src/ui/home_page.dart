@@ -593,16 +593,17 @@ class _HomePageState extends State<HomePage> implements AssistantHost {
           _addLog('Presets backed up to ${copy.path}');
           setState(() => _preUpdateBackup = b);
         } on UnknownPresetLayout catch (e) {
-          // A rebrand on old firmware (PIXIE1 V0.07) keeps presets in another
-          // layout; they cannot be restored on Pocket AMP firmware anyway.
-          if (_pedal!.rebrand == null) {
+          // Old firmware (PIXIE1 V0.07, Pocket AMP V0.05) has no EQ table, so
+          // P01-P79 come back from a raw copy. Any other unknown layout on a
+          // Pocket AMP is a real error; on a rebrand it is expected.
+          final bool old = isOldPresetArea(e.area);
+          if (_pedal!.rebrand == null && !old) {
             rethrow;
           }
           final File raw = await PresetService.keepRaw(
             _pedal!.identity,
             e.area,
           );
-          final bool old = isOldPresetArea(e.area);
           _addLog(
             'Presets are not in the Pocket AMP layout (${e.message}); '
             'raw copy kept at ${raw.path}. '
@@ -2658,7 +2659,7 @@ class ConfirmUpdateDialogState extends State<ConfirmUpdateDialog> {
   }
 }
 
-/// Asks before updating a rebrand whose presets cannot be backed up; true
+/// Asks before updating a pedal whose presets cannot be fully backed up; true
 /// only when the user picks "Update without a backup".
 Future<bool> confirmUpdateWithoutBackup(
   BuildContext context,
