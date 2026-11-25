@@ -2,6 +2,18 @@
 
 What changed in each release, for people who use the app. The commit-level list of every release is on the [releases page](https://github.com/vitoramaral10/pocket-amp-tools/releases).
 
+## [0.8.1](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.8.0...v0.8.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* **update:** update a Pocket AMP on V0.05 firmware, which has no EQ table ([#96](https://github.com/vitoramaral10/pocket-amp-tools/issues/96)) ([886f73f](https://github.com/vitoramaral10/pocket-amp-tools/commit/886f73f86265d84e6d353342abce6ce16a592bda)), closes [#95](https://github.com/vitoramaral10/pocket-amp-tools/issues/95)
+
+
+### Performance Improvements
+
+* **sync:** copy a received frame once instead of on every chunk ([d445423](https://github.com/vitoramaral10/pocket-amp-tools/commit/d445423cf693bdf226ff1379693df12f0cb4c2c9))
+
 ## [0.8.0](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.7.0...v0.8.0) (2026-11-24)
 
 
