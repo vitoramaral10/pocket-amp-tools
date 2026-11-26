@@ -2,6 +2,13 @@
 
 What changed in each release, for people who use the app. The commit-level list of every release is on the [releases page](https://github.com/vitoramaral10/pocket-amp-tools/releases).
 
+## [0.8.2](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.8.1...v0.8.2) (2026-11-26)
+
+
+### Bug Fixes
+
+* **update:** say where the pedal stopped reading the update ([#98](https://github.com/vitoramaral10/pocket-amp-tools/issues/98)) ([58df63f](https://github.com/vitoramaral10/pocket-amp-tools/commit/58df63f0490d8362d22670ef273cac1edcd8334a)), closes [#95](https://github.com/vitoramaral10/pocket-amp-tools/issues/95)
+
 ## [0.8.1](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.8.0...v0.8.1) (2026-11-25)
 
 
