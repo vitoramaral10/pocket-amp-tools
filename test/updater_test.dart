@@ -337,7 +337,8 @@ void main() {
 
     test('a pedal that declines in the loader phase says so', () async {
       final FakePedal pedal = FakePedal(image: pkg.image, stallInLoader: true);
-      final PedalUpdater up = updater(pedal);
+      final List<String> log = <String>[];
+      final PedalUpdater up = updater(pedal, log);
       final DetectedPedal found = (await up.detect())!;
       await expectLater(
         up.update(pkg, found, (_) {}),
@@ -345,9 +346,14 @@ void main() {
           isA<UpdateException>().having(
             (UpdateException e) => e.message,
             'message',
-            contains('already runs this version'),
+            contains('did not accept it'),
           ),
         ),
+      );
+      // Where it stopped is what the next report needs.
+      expect(
+        log,
+        contains(matches(RegExp(r'loader: no request .* bytes \(last at 0x'))),
       );
     });
 
