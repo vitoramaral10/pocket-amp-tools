@@ -237,7 +237,8 @@ void main() {
       ..createSync(recursive: true)
       ..writeAsBytesSync(nam);
     final File there = b.file('Library/Amps/ENGL.nam');
-    for (int i = 0; i < 100 && !there.existsSync(); i++) {
+    // The file lands before the round ends and reports the change.
+    for (int i = 0; i < 100 && (!there.existsSync() || b.changes == 0); i++) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
     expect(there.existsSync(), isTrue);
