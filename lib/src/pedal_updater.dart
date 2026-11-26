@@ -516,6 +516,7 @@ class PedalUpdater {
   ) async {
     final Uint8List covered = Uint8List((image.length + 7) >> 3);
     int total = 0;
+    int lastAddress = -1;
     final Stopwatch started = Stopwatch()..start();
     final Stopwatch sinceLast = Stopwatch()..start();
     final Duration maxTotal = idle * 3 > timings.minPhaseTotal
@@ -528,11 +529,16 @@ class PedalUpdater {
         throw UpdateException('${phase.name}: took too long.');
       }
       if (sinceLast.elapsed > idle) {
+        // How far it got is what tells a declined package from a slow pedal.
+        _log(
+          '${phase.name}: no request for ${idle.inSeconds}s after $total of '
+          '${image.length} bytes (last at ${lastAddress < 0 ? 'none' : '0x${lastAddress.toRadixString(16)}'}, '
+          '${started.elapsed.inSeconds}s in)',
+        );
         throw UpdateException(
           phase == UpdatePhase.loader && total < 64 * 1024
-              ? 'The pedal stopped while reading the update. It does this '
-                    'when it already runs this version. Its firmware was not '
-                    'changed.'
+              ? 'The pedal stopped after reading the start of the update and '
+                    'did not accept it. Its firmware was not changed.'
               : '${phase.name}: the pedal stopped asking for data.',
         );
       }
@@ -585,6 +591,7 @@ class PedalUpdater {
         );
       }
       sinceLast.reset();
+      lastAddress = address;
       await link.send(
         buildFrame(cmdData, <int>[
           ...req,
