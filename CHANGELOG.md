@@ -2,6 +2,13 @@
 
 What changed in each release, for people who use the app. The commit-level list of every release is on the [releases page](https://github.com/vitoramaral10/pocket-amp-tools/releases).
 
+## [0.9.0](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.8.2...v0.9.0) (2026-11-27)
+
+
+### Features
+
+* **ui:** zoom the whole app on the computer ([#101](https://github.com/vitoramaral10/pocket-amp-tools/issues/101)) ([7071f06](https://github.com/vitoramaral10/pocket-amp-tools/commit/7071f06c5717d0860a83dce6d87d4841b3ac40a4)), closes [#100](https://github.com/vitoramaral10/pocket-amp-tools/issues/100)
+
 ## [0.8.2](https://github.com/vitoramaral10/pocket-amp-tools/compare/v0.8.1...v0.8.2) (2026-11-26)
 
 
