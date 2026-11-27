@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 
 import 'src/midi/midi_backend.dart';
 import 'src/ui/app_theme.dart';
+import 'src/ui/editor_settings.dart';
 import 'src/telemetry.dart';
 import 'src/ui/home_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Telemetry.startIfAllowed();
+  await EditorSettings.loadZoom();
   runApp(const PocketAmpApp());
 }
 
@@ -29,16 +31,22 @@ class PocketAmpApp extends StatelessWidget {
       home: HomePage(backend: backend),
       // Past compact a floating snackbar spanning the window reads as a
       // banner; Material 3 keeps it to a readable width.
-      builder: (BuildContext context, Widget? child) {
-        if (MediaQuery.sizeOf(context).width < 600) {
-          return child!;
-        }
-        final ThemeData t = Theme.of(context);
-        return Theme(
-          data: t.copyWith(snackBarTheme: t.snackBarTheme.copyWith(width: 560)),
-          child: child!,
-        );
-      },
+      builder: (BuildContext context, Widget? child) => AppZoom(
+        child: Builder(
+          builder: (BuildContext context) {
+            if (MediaQuery.sizeOf(context).width < 600) {
+              return child!;
+            }
+            final ThemeData t = Theme.of(context);
+            return Theme(
+              data: t.copyWith(
+                snackBarTheme: t.snackBarTheme.copyWith(width: 560),
+              ),
+              child: child!,
+            );
+          },
+        ),
+      ),
     );
   }
 }

@@ -42,6 +42,16 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
         ),
+        if (zoomAvailable)
+          Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: const Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: ZoomSettingsCard(),
+              ),
+            ),
+          ),
         if (updateCheckBuilt)
           Center(
             child: ConstrainedBox(
