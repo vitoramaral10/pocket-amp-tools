@@ -12,6 +12,7 @@ import '../presets/live_link.dart';
 import '../presets/mefcs.dart';
 import '../presets/preset_backup.dart';
 import '../presets/preset_meta.dart';
+import 'editor_settings.dart';
 import 'preset_meta_widgets.dart';
 import 'settings_page.dart';
 import 'visuals.dart';
@@ -920,6 +921,7 @@ List<(String, String)> get _shortcuts => <(String, String)>[
   (_ctrlLabel('Shift+S'), 'Save to a file'),
   (_ctrlLabel('Z'), 'Discard all changes'),
   (_ctrlLabel('R'), 'Read again from the pedal'),
+  if (zoomAvailable) (_ctrlLabel('+ − 0'), 'Zoom in, out or back to 100%'),
   ('?', 'Show these shortcuts'),
 ];
 
